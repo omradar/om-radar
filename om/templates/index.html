@@ -1,0 +1,181 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>OM Radar | L'actualité de l'Olympique de Marseille</title>
+<meta name="description" content="OM Radar, média indépendant sur l'Olympique de Marseille : résultats, classement, mercato et analyses chiffrées mises à jour après chaque journée.">
+<meta name="theme-color" content="#0B1F33">
+<link rel="icon" href="assets/logo-96.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700;800&family=Barlow:wght@400;500;600&display=swap">
+<link rel="stylesheet" href="assets/style.css">
+</head>
+<body>
+{{SAMPLE_BANNER}}
+<header class="top">
+  <div class="wrap">
+    <a class="brand" href="#" aria-label="OM Radar, accueil"><img src="assets/logo-96.png" width="46" height="46" alt="Logo OM Radar"><span>OM <b>Radar</b></span></a>
+    <nav class="nav" aria-label="Rubriques">
+      <a href="#actualites" class="on">Actualités</a>
+      <a href="#mercato">Mercato</a>
+      <a href="#matchs">Matchs</a>
+      <a href="#analyses">Analyses</a>
+    </nav>
+    <div class="icons">
+      <button type="button" id="open-search" aria-label="Rechercher" aria-expanded="false"><svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/></svg></button>
+      <button type="button" id="open-menu" aria-label="Menu"><svg viewBox="0 0 24 24"><path d="M4 7h16M4 12h16M4 17h16"/></svg></button>
+    </div>
+  </div>
+  <div class="searchbar" id="searchbar" hidden><div class="wrap"><input id="q" type="search" placeholder="Filtrer les titres : mercato, Vélodrome, joueur…" aria-label="Filtrer les titres"></div></div>
+  <nav class="chips" aria-label="Rubriques mobile">
+    <a href="#actualites" class="on">Actualités</a><a href="#mercato">Mercato</a><a href="#matchs">Matchs</a><a href="#analyses">Analyses</a>
+  </nav>
+</header>
+
+<div class="status"><div class="wrap">
+  <span>Ligue 1 {{SEASON}}</span>
+  <span>OM : <b>{{POSITION}}e</b>, <b>{{POINTS}} pts</b> en {{PLAYED}} matchs</span>
+  <span>Forme {{FORM}}</span>
+  <span>Mis à jour : {{UPDATED}}</span>
+</div></div>
+
+<main class="wrap">
+  <section class="hero-grid" aria-label="À la une">
+    {{HERO}}
+    {{LASTMATCH}}
+  </section>
+
+  <section class="quick" aria-label="Accès rapide">
+    <a class="qcard" href="#actualites"><small>Toute l'info</small><h3>Actualités</h3><span class="go">›</span></a>
+    <a class="qcard" href="#mercato"><small>Arrivées et départs</small><h3>Mercato</h3><span class="go">›</span></a>
+    <a class="qcard" href="#matchs"><small>Résultats et classement</small><h3>Matchs</h3><span class="go">›</span></a>
+    <a class="qcard" href="#analyses"><small>Le radar de l'OM</small><h3>Analyses</h3><span class="go">›</span></a>
+  </section>
+
+  <div class="layout">
+    <div class="col">
+      <section id="actualites">
+        <h2 class="sec">À la une <small>Titres et liens vers les sources</small></h2>
+        <ul class="articles" id="list-une">{{UNE}}</ul>
+      </section>
+
+      <section id="analyses">
+        <h2 class="sec">Analyses</h2>
+        <div class="radar-card">
+          <div class="txt">
+            <span class="tag">Le Radar</span>
+            <h3>Le profil de jeu de l'OM</h3>
+            {{TEXT}}
+            <p class="note">Chaque axe va de 0 (pire équipe de Ligue 1) à 100 (meilleure équipe), calculé sur les matchs joués.</p>
+          </div>
+          <div>
+            {{RADAR}}
+            <div class="legend"><span><i></i>OM</span><span><i class="avg"></i>Moyenne Ligue 1</span></div>
+          </div>
+        </div>
+      </section>
+
+      <section id="prochain">
+        <h2 class="sec">Prochain match</h2>
+        <div class="next">{{NEXT}}</div>
+      </section>
+
+      <section id="mercato">
+        <h2 class="sec">Mercato</h2>
+        <ul class="compact" id="list-mercato">{{MERCATO}}</ul>
+      </section>
+
+      <section id="dernieres">
+        <h2 class="sec">Dernières actualités</h2>
+        <ul class="compact" id="list-latest">{{LATEST}}</ul>
+      </section>
+    </div>
+
+    <aside class="side" id="matchs" aria-label="Résultats et classement">
+      <div class="box">
+        <h3>Bilan de l'OM</h3>
+        <div class="kpis">
+          <div><b>{{POSITION}}e</b><small>Rang</small></div>
+          <div><b>{{POINTS}}</b><small>Points</small></div>
+          <div><b>{{GOALS}}</b><small>Buts</small></div>
+        </div>
+      </div>
+      <div class="box">
+        <h3>Prochains matchs</h3>
+        <ul class="fix">{{UPCOMING}}</ul>
+      </div>
+      <div class="box">
+        <h3>Derniers résultats</h3>
+        <ul class="fix">{{LAST}}</ul>
+      </div>
+      <div class="box">
+        <h3>Classement Ligue 1</h3>
+        <div class="tablewrap"><table>
+          <thead><tr><th>#</th><th>Équipe</th><th>Pts</th><th>J</th><th>Diff</th><th>Forme</th></tr></thead>
+          <tbody>{{STANDINGS}}</tbody>
+        </table></div>
+      </div>
+      <div class="box">
+        <h3>Meilleurs buteurs</h3>
+        <div class="tablewrap"><table>
+          <thead><tr><th>Joueur</th><th>Équipe</th><th>B</th><th>PD</th></tr></thead>
+          <tbody>{{SCORERS}}</tbody>
+        </table></div>
+      </div>
+    </aside>
+  </div>
+</main>
+
+<footer>
+  <div class="wrap">
+    <div><b>OM Radar</b>, média indépendant. Sans lien officiel avec l'Olympique de Marseille.</div>
+    <div>Résultats, classements et buteurs : football-data.org. Titres de presse : liens vers les sites des médias d'origine.</div>
+    <div>Mis à jour : {{UPDATED}}</div>
+  </div>
+</footer>
+
+<nav class="bottombar" aria-label="Navigation principale">
+  <a href="#" class="on"><svg viewBox="0 0 24 24"><path d="M4 11l8-7 8 7v9h-5v-6H9v6H4z"/></svg>Accueil</a>
+  <a href="#actualites"><svg viewBox="0 0 24 24"><rect x="4" y="5" width="16" height="14" rx="2"/><path d="M8 9h8M8 13h8"/></svg>Actualités</a>
+  <a href="#matchs"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="8"/><path d="M12 8l3 2-1 4h-4l-1-4z"/></svg>Matchs</a>
+  <a href="#mercato"><svg viewBox="0 0 24 24"><path d="M5 8h13l-3-3M19 16H6l3 3"/></svg>Mercato</a>
+  <a href="#analyses"><svg viewBox="0 0 24 24"><path d="M4 4v16h16M8 16v-4M13 16V8M18 16v-6"/></svg>Plus</a>
+</nav>
+
+<script>
+(function () {
+  var bar = document.getElementById("searchbar"), btn = document.getElementById("open-search"), q = document.getElementById("q");
+  btn.addEventListener("click", function () {
+    bar.hidden = !bar.hidden;
+    btn.setAttribute("aria-expanded", String(!bar.hidden));
+    if (!bar.hidden) q.focus();
+  });
+  document.getElementById("open-menu").addEventListener("click", function () {
+    document.getElementById("mercato").scrollIntoView();
+    window.scrollTo({ top: document.querySelector(".layout").offsetTop - 70, behavior: "smooth" });
+  });
+  q.addEventListener("input", function () {
+    var t = q.value.trim().toLowerCase();
+    document.querySelectorAll("#list-une li, #list-mercato li, #list-latest li").forEach(function (li) {
+      li.hidden = t !== "" && li.textContent.toLowerCase().indexOf(t) === -1;
+    });
+  });
+  var links = document.querySelectorAll(".nav a, .chips a");
+  var map = {}; links.forEach(function (a) { (map[a.getAttribute("href")] = map[a.getAttribute("href")] || []).push(a); });
+  if ("IntersectionObserver" in window) {
+    var io = new IntersectionObserver(function (es) {
+      es.forEach(function (e) {
+        if (e.isIntersecting) {
+          links.forEach(function (a) { a.classList.remove("on"); });
+          (map["#" + e.target.id] || []).forEach(function (a) { a.classList.add("on"); });
+        }
+      });
+    }, { rootMargin: "-30% 0px -60% 0px" });
+    ["actualites", "mercato", "matchs", "analyses"].forEach(function (id) { var el = document.getElementById(id); if (el) io.observe(el); });
+  }
+})();
+</script>
+</body>
+</html>

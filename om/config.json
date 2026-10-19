@@ -1,0 +1,15 @@
+{
+  "max_news": 14,
+  "feeds": [
+    {
+      "name": "Actualités",
+      "category": "Actualités",
+      "url": "https://news.google.com/rss/search?q=Olympique+de+Marseille&hl=fr&gl=FR&ceid=FR:fr"
+    },
+    {
+      "name": "Mercato",
+      "category": "Mercato",
+      "url": "https://news.google.com/rss/search?q=OM+mercato&hl=fr&gl=FR&ceid=FR:fr"
+    }
+  ]
+}

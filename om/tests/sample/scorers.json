@@ -1,0 +1,112 @@
+{
+ "scorers": [
+  {
+   "player": {
+    "name": "Joueur Test F"
+   },
+   "team": {
+    "id": 3,
+    "name": "Olympique Lyonnais",
+    "shortName": "Lyon"
+   },
+   "goals": 7,
+   "assists": 1
+  },
+  {
+   "player": {
+    "name": "Joueur Test D"
+   },
+   "team": {
+    "id": 1,
+    "name": "Paris Saint-Germain FC",
+    "shortName": "PSG"
+   },
+   "goals": 6,
+   "assists": 1
+  },
+  {
+   "player": {
+    "name": "Joueur Test G"
+   },
+   "team": {
+    "id": 4,
+    "name": "RC Lens",
+    "shortName": "Lens"
+   },
+   "goals": 6,
+   "assists": 1
+  },
+  {
+   "player": {
+    "name": "Joueur Test I"
+   },
+   "team": {
+    "id": 7,
+    "name": "AS Monaco FC",
+    "shortName": "Monaco"
+   },
+   "goals": 6,
+   "assists": 1
+  },
+  {
+   "player": {
+    "name": "Joueur Test A"
+   },
+   "team": {
+    "id": 2,
+    "name": "Olympique de Marseille",
+    "shortName": "Marseille"
+   },
+   "goals": 5,
+   "assists": 1
+  },
+  {
+   "player": {
+    "name": "Joueur Test H"
+   },
+   "team": {
+    "id": 5,
+    "name": "Lille OSC",
+    "shortName": "Lille"
+   },
+   "goals": 5,
+   "assists": 1
+  },
+  {
+   "player": {
+    "name": "Joueur Test E"
+   },
+   "team": {
+    "id": 1,
+    "name": "Paris Saint-Germain FC",
+    "shortName": "PSG"
+   },
+   "goals": 4,
+   "assists": 2
+  },
+  {
+   "player": {
+    "name": "Joueur Test B"
+   },
+   "team": {
+    "id": 2,
+    "name": "Olympique de Marseille",
+    "shortName": "Marseille"
+   },
+   "goals": 3,
+   "assists": 2
+  },
+  {
+   "player": {
+    "name": "Joueur Test C"
+   },
+   "team": {
+    "id": 2,
+    "name": "Olympique de Marseille",
+    "shortName": "Marseille"
+   },
+   "goals": 1,
+   "assists": 3
+  }
+ ]
+}
