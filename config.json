@@ -1,7 +1,7 @@
 {
   "site_url": "https://omradar.github.io/om-radar",
   "domain": "",
-  "max_news": 24,
+  "max_news": 32,
   "excerpt_chars": 160,
   "images": true,
   "google_resolve_max": 14,
@@ -20,25 +20,12 @@
     "sport.fr": "Sport.fr",
     "lequipe.fr": "L'Équipe",
     "but.fr": "But! Football Club",
-    "om.fr": "OM.fr"
+    "om.fr": "OM.fr",
+    "football365.fr": "Football365",
+    "livefoot.fr": "LiveFoot",
+    "sportune.fr": "Sportune"
   },
   "sources": [
-    {
-      "name": "Google Actualités",
-      "kind": "google",
-      "category": "Actualités",
-      "url": "https://news.google.com/rss/search?q=Olympique+de+Marseille&hl=fr&gl=FR&ceid=FR:fr",
-      "enabled": true,
-      "max": 12
-    },
-    {
-      "name": "Google Actualités Mercato",
-      "kind": "google",
-      "category": "Mercato",
-      "url": "https://news.google.com/rss/search?q=OM+mercato&hl=fr&gl=FR&ceid=FR:fr",
-      "enabled": true,
-      "max": 8
-    },
     {
       "name": "FootMarseille",
       "category": "auto",
@@ -56,10 +43,10 @@
       "max": 12
     },
     {
-      "name": "Foot Mercato",
+      "name": "Maxifoot",
       "category": "auto",
-      "url": "https://www.footmercato.net/flux-rss",
-      "only_om": true,
+      "url": "http://rss.maxifoot.com/football-om.xml",
+      "only_om": false,
       "enabled": true,
       "max": 10
     },
@@ -67,6 +54,14 @@
       "name": "RMC Sport",
       "category": "auto",
       "url": "https://rmcsport.bfmtv.com/rss/football/",
+      "only_om": true,
+      "enabled": true,
+      "max": 10
+    },
+    {
+      "name": "Foot Mercato",
+      "category": "auto",
+      "url": "https://www.footmercato.net/flux-rss",
       "only_om": true,
       "enabled": true,
       "max": 10
@@ -80,12 +75,108 @@
       "max": 8
     },
     {
-      "name": "Maxifoot",
+      "name": "L'Équipe",
       "category": "auto",
-      "url": "http://rss.maxifoot.com/football-om.xml",
+      "url": "https://dwh.lequipe.fr/api/edito/rss?path=/Football/Marseille/",
       "only_om": false,
       "enabled": true,
       "max": 10
+    },
+    {
+      "name": "La Provence",
+      "category": "auto",
+      "site": "https://www.laprovence.com/",
+      "only_om": true,
+      "enabled": true,
+      "max": 10
+    },
+    {
+      "name": "Foot01",
+      "category": "auto",
+      "site": "https://www.foot01.com/",
+      "only_om": true,
+      "enabled": true,
+      "max": 10
+    },
+    {
+      "name": "433 Foot",
+      "category": "auto",
+      "site": "https://www.433foot.fr/",
+      "only_om": true,
+      "enabled": true,
+      "max": 10
+    },
+    {
+      "name": "Football365",
+      "category": "auto",
+      "site": "https://www.football365.fr/",
+      "only_om": true,
+      "enabled": true,
+      "max": 10
+    },
+    {
+      "name": "Mercato365",
+      "category": "auto",
+      "site": "https://www.mercato365.com/",
+      "only_om": true,
+      "enabled": true,
+      "max": 10
+    },
+    {
+      "name": "LiveFoot",
+      "category": "auto",
+      "site": "https://www.livefoot.fr/",
+      "only_om": true,
+      "enabled": true,
+      "max": 10
+    },
+    {
+      "name": "Sportune",
+      "category": "auto",
+      "site": "https://www.sportune.fr/",
+      "only_om": true,
+      "enabled": true,
+      "max": 8
+    },
+    {
+      "name": "Sport.fr",
+      "category": "auto",
+      "site": "https://www.sport.fr/",
+      "only_om": true,
+      "enabled": true,
+      "max": 8
+    },
+    {
+      "name": "But! Football Club",
+      "category": "auto",
+      "site": "https://www.but.fr/",
+      "only_om": true,
+      "enabled": true,
+      "max": 8
+    },
+    {
+      "name": "OM.fr",
+      "category": "Actualités",
+      "site": "https://www.om.fr/fr",
+      "only_om": false,
+      "enabled": true,
+      "max": 8
+    },
+    {
+      "name": "Google Actualités",
+      "kind": "google",
+      "category": "Actualités",
+      "url": "https://news.google.com/rss/search?q=Olympique+de+Marseille&hl=fr&gl=FR&ceid=FR:fr",
+      "enabled": true,
+      "max": 12
+    },
+    {
+      "name": "Google Actualités Mercato",
+      "kind": "google",
+      "category": "Mercato",
+      "url": "https://news.google.com/rss/search?q=OM+mercato&hl=fr&gl=FR&ceid=FR:fr",
+      "enabled": true,
+      "max": 8
     }
   ]
 }

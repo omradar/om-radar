@@ -159,22 +159,57 @@ def gn_parse_reply(text):
 
 
 def gn_resolve(token):
+    """Adresse réelle de l'article, ou RuntimeError avec la raison (visible dans status.json)."""
     url = gn_legacy(token)
     if url:
         return url
     sg = ts = None
+    title = ""
     for u in (f"https://news.google.com/articles/{token}", f"https://news.google.com/rss/articles/{token}"):
         page = http_get(u, limit=500_000, timeout=10).decode("utf-8", "ignore")
         sg = re.search(r'data-n-a-sg="([^"]+)"', page)
         ts = re.search(r'data-n-a-ts="([^"]+)"', page)
         if sg and ts:
             break
+        t = re.search(r"<title>(.*?)</title>", page, re.S | re.I)
+        title = clean_html(t.group(1))[:60] if t else f"{len(page)} octets"
     if not (sg and ts):
-        return ""
+        raise RuntimeError("page Google sans signature : " + title)
     inner = ('["garturlreq",[["X","X",["X","X"],null,null,1,1,"US:en",null,1,null,null,null,null,null,0,1],'
              f'"X","X",1,[1,1,1],1,1,null,0,0,null,0],"{token}",{ts.group(1)},"{sg.group(1)}"]')
     body = "f.req=" + urllib.parse.quote(json.dumps([[["Fbv4je", inner]]]))
-    return gn_parse_reply(http_post("https://news.google.com/_/DotsSplashUi/data/batchexecute", body))
+    reply = http_post("https://news.google.com/_/DotsSplashUi/data/batchexecute", body)
+    real = gn_parse_reply(reply)
+    if not real:
+        raise RuntimeError("réponse Google illisible : " + clean_html(reply)[:70])
+    return real
+
+
+# ---- détection automatique du flux RSS d'un site à partir de son adresse
+
+def discover_feed(site):
+    """Renvoie (adresse du flux, contenu) pour une page d'accueil, ou ('', b'')."""
+    cands = []
+    try:
+        page = http_get(site, limit=400_000, timeout=12).decode("utf-8", "ignore")
+        for tag in re.findall(r"<link\b[^>]*>", page, re.I):
+            if re.search(r"type=[\"']application/(rss|atom)\+xml[\"']", tag, re.I):
+                m = re.search(r"href=[\"']([^\"']+)[\"']", tag, re.I)
+                if m and "comment" not in m.group(1).lower():
+                    cands.append(urllib.parse.urljoin(site, html.unescape(m.group(1))))
+    except Exception:
+        pass
+    root = site if site.endswith("/") else site + "/"
+    cands += [root + x for x in ("feed", "feed/", "rss", "rss.xml", "feed.xml", "flux-rss")]
+    for u in dict.fromkeys(cands):
+        try:
+            raw = http_get(u, timeout=12)
+        except Exception:
+            continue
+        head = raw[:200_000]
+        if b"<item" in head or b"<entry" in head:
+            return u, raw
+    return "", b""
 
 
 # ---- petit cache entre deux mises à jour (restauré par GitHub Actions), pour ne pas redemander les mêmes pages
@@ -330,7 +365,7 @@ def sample_photo(i):
 
 def load_news(sample):
     """Titres, source, image, court extrait et lien. Un flux en échec est ignoré, le compte rendu va dans le journal et dans status.json."""
-    items, errors = [], {}
+    items, errors, feeds = [], {}, {}
     if sample:
         now = datetime.now(timezone.utc).isoformat()
         for i, (t, c) in enumerate([
@@ -344,16 +379,28 @@ def load_news(sample):
                           "image": sample_photo(i) if i in (0, 1, 2, 5) else "",
                           "excerpt_raw": "Court extrait d'exemple pour vérifier l'affichage du résumé sous le titre de l'article."})
     else:
-        for src in CONFIG.get("sources", []):
-            if not src.get("enabled", True):
-                continue
+        def fetch_source(src):
             try:
-                got = parse_feed(http_get(src["url"]), src)
+                if src.get("site") and not src.get("url"):
+                    feed, raw = discover_feed(src["site"])
+                    if not raw:
+                        raise RuntimeError("aucun flux RSS trouvé sur ce site")
+                else:
+                    feed, raw = src["url"], http_get(src["url"])
+                return src, feed, parse_feed(raw, src), ""
             except Exception as e:
-                errors[src["name"]] = f"{type(e).__name__} {getattr(e, 'code', '')}".strip()
-                print(f"[source] {src['name']} : ECHEC ({errors[src['name']]})", file=sys.stderr)
-                continue
-            items += got
+                why = str(e) if isinstance(e, RuntimeError) else f"{type(e).__name__} {getattr(e, 'code', '')}".strip()
+                return src, "", [], why
+
+        active = [s for s in CONFIG.get("sources", []) if s.get("enabled", True)]
+        with ThreadPoolExecutor(max_workers=6) as ex:
+            for src, feed, got, why in ex.map(fetch_source, active):
+                if why:
+                    errors[src["name"]] = why
+                    print(f"[source] {src['name']} : ECHEC ({why})", file=sys.stderr)
+                    continue
+                feeds[src["name"]] = feed
+                items += got
 
     seen, uniq = set(), []
     for n in items:
@@ -385,15 +432,18 @@ def load_news(sample):
                     continue
                 budget -= 1
                 try:
-                    real = gn_resolve(tok)
-                except Exception:
+                    real, why = gn_resolve(tok), ""
+                except Exception as e:
                     real = ""
-                ent = cache["g:" + tok] = {"url": real, "t": time.time(), "fail": not real}
+                    why = str(e) if isinstance(e, RuntimeError) else f"{type(e).__name__} {getattr(e, 'code', '')}".strip()
+                ent = cache["g:" + tok] = {"url": real, "t": time.time(), "fail": not real, "why": why}
                 time.sleep(0.4)
             if ent["url"]:
                 n["link"] = ent["url"]
                 n["resolved"] = True
                 resolved += 1
+            else:
+                n["gn_why"] = ent.get("why") or "non essayé (limite atteinte)"
         # un même article peut arriver par deux chemins : on garde le premier
         links, keep = set(), []
         for n in uniq:
@@ -426,8 +476,16 @@ def load_news(sample):
             continue
         mine = [n for n in uniq if n["src"] == src["name"]]
         row = {"name": src["name"], "kept": len(mine), "with_image": sum(1 for n in mine if n["image"])}
+        if src["name"] in feeds and src.get("site"):
+            row["flux"] = feeds[src["name"]]
         if src.get("kind") == "google":
             row["adresse_reelle_trouvee"] = sum(1 for n in mine if n.get("resolved"))
+            why = {}
+            for n in mine:
+                if n.get("gn_why"):
+                    why[n["gn_why"]] = why.get(n["gn_why"], 0) + 1
+            if why:
+                row["echecs"] = why
         if src["name"] in errors:
             row["erreur"] = errors[src["name"]]
         stats.append(row)
@@ -824,7 +882,7 @@ def render(standings, matches_raw, scorers_raw, news, source_names, sample):
                      '<p>Le championnat n\'a pas encore commencé.</p></div>')
 
     # ----- actualités : carrousel, listes
-    pool = news[:14]
+    pool = news[:20]
     slides = ([n for n in pool if n.get("image")] + [n for n in pool if not n.get("image")])[:5]
     used = {id(n) for n in slides}
     if slides:
@@ -849,7 +907,9 @@ def render(standings, matches_raw, scorers_raw, news, source_names, sample):
     texts = build_text(stats, om, finished, upcoming, pred)
     text_html = "".join(f"<p>{esc(t)}</p>" for t in texts) or "<p>Le championnat n'a pas encore commencé.</p>"
 
-    une_list = [n for n in news if id(n) not in used and n["category"] != "Mercato"][:6]
+    # « À la une » : à récence égale on montre d'abord les articles qui ont une photo
+    cands = [n for n in news[:24] if id(n) not in used and n["category"] != "Mercato"]
+    une_list = sorted(cands, key=lambda n: 0 if n.get("image") else 1)[:6]
     used |= {id(n) for n in une_list}
     mercato_list = [n for n in news if id(n) not in used and n["category"] == "Mercato"][:6]
     used |= {id(n) for n in mercato_list}
@@ -930,11 +990,37 @@ def render(standings, matches_raw, scorers_raw, news, source_names, sample):
     return index_html, pages, [n["slug"] for n in news], base
 
 
+def annotate(stats, news):
+    """Compte rendu visible dans l'onglet Actions de GitHub (annotations), pour voir quelles sources marchent."""
+    def cmd(s):
+        return str(s).replace("%", "%25").replace("\r", "%0D").replace("\n", "%0A")
+
+    rows = []
+    for r in stats:
+        bits = [f"{r['name']}: {r['kept']} articles, {r['with_image']} photos"]
+        if r.get("flux"):
+            bits.append("flux " + r["flux"])
+        if r.get("adresse_reelle_trouvee") is not None:
+            bits.append(f"adresses réelles {r['adresse_reelle_trouvee']}")
+        if r.get("echecs"):
+            bits.append("échecs " + json.dumps(r["echecs"], ensure_ascii=False))
+        if r.get("erreur"):
+            bits.append("ERREUR " + r["erreur"])
+        rows.append(" ; ".join(bits))
+    for i in range(0, len(rows), 4):
+        bad = any("ERREUR" in x for x in rows[i:i + 4])
+        print(f"::{'warning' if bad else 'notice'} title=Sources {i // 4 + 1}::" + cmd(" | ".join(rows[i:i + 4])))
+    total, imgs = len(news), sum(1 for n in news if n.get("image"))
+    print(f"::notice title=Résumé::{total} articles gardés, {imgs} avec photo")
+
+
 def main():
     sample = "--sample" in sys.argv
     out = ROOT / ("dist-sample" if sample else "dist")
     standings, matches, scorers = load_data(sample)
     news, source_names, stats = load_news(sample)
+    if not sample:
+        annotate(stats, news)
     index_html, pages, slugs, base = render(standings, matches, scorers, news, source_names, sample)
     if out.exists():
         shutil.rmtree(out)
