@@ -374,7 +374,7 @@ def load_news(sample):
                 ("Troisième titre d'exemple", "Actualités"), ("Quatrième titre d'exemple", "Actualités"),
                 ("Cinquième titre d'exemple", "Actualités"), ("Titre mercato d'exemple", "Mercato"),
                 ("Autre titre mercato d'exemple", "Mercato"), ("Dernier titre d'exemple", "Actualités")]):
-            items.append({"title": t, "source": "Source test", "category": c, "link": "https://example.com/" + str(i),
+            items.append({"title": t, "source": "Média test " + "ABCD"[i % 4], "category": c, "link": "https://example.com/" + str(i),
                           "src": "test", "iso": now, "google": False,
                           "image": sample_photo(i) if i in (0, 1, 2, 5) else "",
                           "excerpt_raw": "Court extrait d'exemple pour vérifier l'affichage du résumé sous le titre de l'article."})
@@ -412,7 +412,13 @@ def load_news(sample):
         n["orig"] = n["link"]
         uniq.append(n)
     uniq.sort(key=lambda n: n["iso"] or "", reverse=True)
-    uniq = uniq[: CONFIG.get("max_news", 24)]
+    # pas plus de per_source_cap articles par média, pour que la page ne soit pas celle d'un seul site
+    cap, per_source, mixed = CONFIG.get("per_source_cap", 6), {}, []
+    for n in uniq:
+        per_source[n["source"]] = per_source.get(n["source"], 0) + 1
+        if per_source[n["source"]] <= cap:
+            mixed.append(n)
+    uniq = mixed[: CONFIG.get("max_news", 24)]
 
     resolved = 0
     if not CONFIG.get("images", True):
@@ -883,7 +889,15 @@ def render(standings, matches_raw, scorers_raw, news, source_names, sample):
 
     # ----- actualités : carrousel, listes
     pool = news[:20]
-    slides = ([n for n in pool if n.get("image")] + [n for n in pool if not n.get("image")])[:5]
+    # carrousel : des photos d'abord, et au plus 2 diapositives par média
+    slides, per_src = [], {}
+    for n in [x for x in pool if x.get("image")] + [x for x in pool if not x.get("image")]:
+        if per_src.get(n["source"], 0) >= 2:
+            continue
+        per_src[n["source"]] = per_src.get(n["source"], 0) + 1
+        slides.append(n)
+        if len(slides) == 5:
+            break
     used = {id(n) for n in slides}
     if slides:
         track = "".join(hero_slide(n, i) for i, n in enumerate(slides))
@@ -974,7 +988,8 @@ def render(standings, matches_raw, scorers_raw, news, source_names, sample):
         fig = ""
         if n.get("image"):
             fig = (f'<figure class="artfig"><span class="ph">{esc(initials(n["source"]))}</span>'
-                   f'<img src="{esc(n["image"])}" alt="" referrerpolicy="no-referrer" onerror="this.remove()"></figure>')
+                   f'<img src="{esc(n["image"])}" alt="" referrerpolicy="no-referrer" onerror="this.remove()">'
+                   f'<figcaption>Photo : {esc(n["source"])}</figcaption></figure>')
         lead = f'<p class="lead">{esc(n["excerpt"])}</p>' if n.get("excerpt") else ""
         desc = n.get("excerpt") or f"{n['title']} : résumé et lien vers {n['source']}, sur OM Radar."
         vals = dict(common)

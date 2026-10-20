@@ -2,6 +2,7 @@
   "site_url": "https://omradar.github.io/om-radar",
   "domain": "",
   "max_news": 32,
+  "per_source_cap": 6,
   "excerpt_chars": 160,
   "images": true,
   "google_resolve_max": 14,
@@ -38,9 +39,10 @@
       "name": "Le Phocéen",
       "category": "auto",
       "only_om": false,
-      "enabled": true,
+      "enabled": false,
       "max": 12,
-      "site": "https://www.lephoceen.fr/"
+      "site": "https://www.lephoceen.fr/",
+      "note": "Désactivé : aucun flux RSS trouvé automatiquement sur ce site."
     },
     {
       "name": "Maxifoot",
@@ -145,8 +147,9 @@
       "category": "auto",
       "site": "https://www.footsur7.fr/",
       "only_om": true,
-      "enabled": true,
-      "max": 8
+      "enabled": false,
+      "max": 8,
+      "note": "Désactivé : aucun flux RSS trouvé automatiquement sur ce site."
     },
     {
       "name": "90min",
@@ -169,8 +172,9 @@
       "category": "auto",
       "site": "https://www.lamarseillaise.fr/",
       "only_om": true,
-      "enabled": true,
-      "max": 8
+      "enabled": false,
+      "max": 8,
+      "note": "Désactivé : aucun flux RSS trouvé automatiquement sur ce site."
     },
     {
       "name": "Made in Marseille",
@@ -185,24 +189,27 @@
       "category": "auto",
       "site": "https://actufoot.fr/",
       "only_om": true,
-      "enabled": true,
-      "max": 8
+      "enabled": false,
+      "max": 8,
+      "note": "Désactivé : aucun flux RSS trouvé automatiquement sur ce site."
     },
     {
       "name": "Maritima",
       "category": "auto",
       "site": "https://www.maritima.info/",
       "only_om": true,
-      "enabled": true,
-      "max": 8
+      "enabled": false,
+      "max": 8,
+      "note": "Désactivé : aucun flux RSS trouvé automatiquement sur ce site."
     },
     {
       "name": "Eurosport",
       "category": "auto",
       "site": "https://www.eurosport.fr/football/",
       "only_om": true,
-      "enabled": true,
-      "max": 8
+      "enabled": false,
+      "max": 8,
+      "note": "Désactivé : aucun flux RSS trouvé automatiquement sur ce site."
     },
     {
       "name": "Sportune",

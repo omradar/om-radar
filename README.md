@@ -45,15 +45,18 @@ Ouvre ensuite `dist-sample/index.html`. Ce sont des données inventées, à ne j
 ## Choisir les sources de presse
 Tout se règle dans `config.json`, liste `sources`. Pour chaque média :
 - `enabled` : `true` pour l'utiliser, `false` pour l'écarter.
-- `url` : adresse de son flux RSS.
+- `site` : adresse de sa page d'accueil. Le site cherche alors lui-même le flux RSS. C'est le plus simple pour ajouter un média.
+- `url` : adresse exacte de son flux RSS, si tu la connais (à la place de `site`).
 - `only_om` : `true` si le flux parle de tout le football (le site ne garde alors que les articles sur l'OM).
 - `category` : `"auto"` classe les articles en Mercato ou Actualités d'après le titre.
 
-Après chaque mise à jour, le fichier `status.json` du site (par exemple `https://omradar.github.io/om-radar/status.json`) indique pour chaque source le nombre de titres retenus, le nombre de photos trouvées et l'erreur éventuelle si le flux ne répond pas.
+Pour ajouter un média : copie un bloc existant, change `name` et `site`, puis lance « Run workflow » dans l'onglet Actions. Si le site n'a pas de flux RSS public, la mise à jour le signale (voir ci-dessous) et il n'apparaît simplement pas.
 
-Les sources « Google Actualités » donnent des titres de nombreux médias, mais leurs liens sont des redirections. Le site retrouve l'adresse réelle de l'article (méthode non officielle, limitée à `google_resolve_max` articles par mise à jour) pour récupérer sa photo. Si Google change son fonctionnement, ces articles gardent simplement une vignette à la place de la photo. Les noms de médias affichés se règlent dans `source_names`.
+Après chaque mise à jour, l'onglet **Actions** de GitHub (clique sur la dernière exécution, section « Annotations ») indique pour chaque source le nombre de titres retenus, le nombre de photos trouvées et l'erreur éventuelle. Le fichier `status.json` du site donne la même information.
 
-Réglages généraux : `images` (`false` pour ne plus afficher aucune photo de presse), `excerpt_chars` (longueur du court extrait, `0` pour aucun), `max_news` (nombre total d'articles).
+Les sources « Google Actualités » sont désactivées : leurs liens sont des redirections et l'adresse réelle des articles n'est plus récupérable, donc elles n'ont pas de photo. Les médias qui n'ont pas de flux RSS public (par exemple om.fr) ne peuvent pas être suivis.
+
+Réglages généraux : `images` (`false` pour ne plus afficher aucune photo de presse), `excerpt_chars` (longueur du court extrait, `0` pour aucun), `max_news` (nombre total d'articles), `per_source_cap` (nombre maximum d'articles par média, pour garder une page variée).
 
 ## Nom de domaine (om-radar.fr)
 1. Achète `om-radar.fr` chez un bureau d'enregistrement (OVHcloud, Gandi, etc.).
