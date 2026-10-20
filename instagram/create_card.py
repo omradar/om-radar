@@ -19,37 +19,23 @@ UA = {"User-Agent": "Mozilla/5.0 (compatible; OM-Radar-Instagram/1.0)"}
 def clean(s):
     return re.sub(r"\s+", " ", html.unescape(re.sub(r"<[^>]+>", " ", s or ""))).strip()
 
-class Page(HTMLParser):
-    def __init__(self):
-        super().__init__()
-        self.headings = []
-        self.images = []
-        self.heading_level = None
-        self.heading = ""
-        self.in_meta = False
-    def handle_starttag(self, tag, attrs):
-        a = dict(attrs)
-        classes = a.get("class", "").lower()
-        if tag in ("h1", "h2", "h3"):
-            self.heading_level = tag
-            self.heading = ""
-        if tag == "img":
-            src = a.get("src") or a.get("data-src") or a.get("data-lazy-src") or ""
-            alt = a.get("alt", "")
-            if src and not any(x in (src + alt).lower() for x in ("logo", "avatar", "icon", "flag", "badge")):
-                self.images.append(urllib.parse.urljoin(SITE, src))
-        if tag == "meta" and a.get("property") == "og:image" and a.get("content"):
-            self.images.insert(0, urllib.parse.urljoin(SITE, a["content"]))
-    def handle_data(self, data):
-        if self.heading_level:
-            self.heading += " " + data
-    def handle_endtag(self, tag):
-        if tag == self.heading_level:
-            value = clean(self.heading)
-            if len(value) > 18 and "om radar" not in value.lower() and value not in self.headings:
-                self.headings.append(value)
-            self.heading_level = None
-            self.heading = ""
+def extract_featured(page_html):
+    """Titre et photo extraits du même bloc vedette ; jamais d'image choisie au hasard."""
+    blocks = re.findall(
+        r'<article\\b(?=[^>]*class=["\\'][^"\\']*\\bslide\\b[^"\\']*\\bhero\\b[^"\\']*["\\'])[^>]*>(.*?)</article>',
+        page_html, re.I | re.S
+    )
+    for block in blocks:
+        heading = re.search(r'<h1\\b[^>]*>(.*?)</h1>', block, re.I | re.S)
+        image = re.search(r'<img\\b(?=[^>]*class=["\\'][^"\\']*\\bbg\\b[^"\\']*["\\'])[^>]*>', block, re.I | re.S)
+        if not heading or not image:
+            continue
+        title = clean(heading.group(1))
+        src = re.search(r'\\bsrc=["\\']([^"\\']+)["\\']', image.group(0), re.I)
+        if title and src:
+            return title, urllib.parse.urljoin(SITE, html.unescape(src.group(1)))
+    return "", ""
+
 
 def font(size, bold=False):
     paths = [
@@ -91,31 +77,24 @@ def wrap(draw, text, f, max_width, max_lines=4):
 req = urllib.request.Request(SITE, headers=UA)
 with urllib.request.urlopen(req, timeout=20) as response:
     page_html = response.read().decode("utf-8", "replace")
-parser = Page()
-parser.feed(page_html)
+title, image_url = extract_featured(page_html)
+if not title or not image_url:
+    raise SystemExit("Impossible d'associer avec certitude le titre et la photo de la même actualité : aucune carte générée.")
 
-title = parser.headings[0] if parser.headings else "L’actualité de l’Olympique de Marseille"
-title = re.sub(r"\s+", " ", title).strip()
+title = re.sub(r"\\s+", " ", title).strip()
 # Un titre éditorial court donne une carte lisible, sans déformer l'information.
 if len(title) > 112:
     short = title[:109].rsplit(" ", 1)[0].rstrip(" ,;:-") + "…"
 else:
     short = title
 
-photo = None
-for url in dict.fromkeys(parser.images):
-    try:
-        raw = fetch(url)
-        candidate = Image.open(io.BytesIO(raw)).convert("RGB")
-        if candidate.width >= 300 and candidate.height >= 180:
-            photo = candidate
-            break
-    except Exception:
-        continue
-
-if photo is None:
-    # Pas de carte défectueuse si le site ne fournit pas d'image exploitable.
-    raise SystemExit("Aucune photo d'article exploitable trouvée : carte non générée.")
+try:
+    raw = fetch(image_url)
+    photo = Image.open(io.BytesIO(raw)).convert("RGB")
+    if photo.width < 300 or photo.height < 180:
+        raise ValueError("photo trop petite")
+except Exception as exc:
+    raise SystemExit("La photo associée à l'actualité n'est pas exploitable : carte non générée.") from exc
 
 # Recadrage carré centré, puis léger flou uniquement sous le voile pour un rendu éditorial.
 ratio = max(W / photo.width, H / photo.height)
