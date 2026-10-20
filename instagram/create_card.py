@@ -19,22 +19,30 @@ UA = {"User-Agent": "Mozilla/5.0 (compatible; OM-Radar-Instagram/1.0)"}
 def clean(s):
     return re.sub(r"\s+", " ", html.unescape(re.sub(r"<[^>]+>", " ", s or ""))).strip()
 
-def extract_featured(page_html):
-    """Titre et photo extraits du même bloc vedette ; jamais d'image choisie au hasard."""
-    blocks = re.findall(
-        r"<article\\b[^>]*class=\"[^\"]*\\bslide\\b[^\"]*\\bhero\\b[^\"]*\"[^>]*>(.*?)</article>",
-        page_html, re.I | re.S
-    )
-    for block in blocks:
-        heading = re.search(r"<h1\\b[^>]*>(.*?)</h1>", block, re.I | re.S)
-        image = re.search(r"<img\\b[^>]*class=\"[^\"]*\\bbg\\b[^\"]*\"[^>]*>", block, re.I | re.S)
-        if not heading or not image:
-            continue
-        title = clean(heading.group(1))
-        src = re.search(r"\\bsrc=\"([^\"]+)\"", image.group(0), re.I)
-        if title and src:
-            return title, urllib.parse.urljoin(SITE, html.unescape(src.group(1)))
-    return "", ""
+class FeaturedTitle(HTMLParser):
+    """Lit le titre de la une, sans télécharger ni réutiliser les images."""
+    def __init__(self):
+        super().__init__(convert_charrefs=True)
+        self.in_featured = False
+        self.in_h1 = False
+        self.title = ""
+        self.parts = []
+    def handle_starttag(self, tag, attrs):
+        classes = dict(attrs).get("class", "").split()
+        if tag == "article" and "slide" in classes and "hero" in classes:
+            self.in_featured = True
+        if self.in_featured and tag == "h1":
+            self.in_h1 = True
+            self.parts = []
+    def handle_data(self, data):
+        if self.in_featured and self.in_h1:
+            self.parts.append(data)
+    def handle_endtag(self, tag):
+        if self.in_featured and tag == "h1" and self.in_h1:
+            self.title = clean(" ".join(self.parts))
+            self.in_h1 = False
+        elif self.in_featured and tag == "article":
+            self.in_featured = False
 
 
 def font(size, bold=False):
@@ -74,63 +82,47 @@ def wrap(draw, text, f, max_width, max_lines=4):
         lines[-1] = lines[-1].rstrip(" ,;:.") + "…"
     return lines
 
-req = urllib.request.Request(SITE, headers=UA)
+req = urllib.request.Request(SITE, headers={"User-Agent": "Mozilla/5.0 (compatible; OM-Radar-Instagram/1.0)"})
 with urllib.request.urlopen(req, timeout=20) as response:
     page_html = response.read().decode("utf-8", "replace")
-title, image_url = extract_featured(page_html)
-if not title or not image_url:
-    raise SystemExit("Impossible d'associer avec certitude le titre et la photo de la même actualité : aucune carte générée.")
-
+parser = FeaturedTitle()
+parser.feed(page_html)
+title = parser.title or "L’actualité de l’Olympique de Marseille"
 title = re.sub(r"\\s+", " ", title).strip()
-# Un titre éditorial court donne une carte lisible, sans déformer l'information.
-if len(title) > 112:
-    short = title[:109].rsplit(" ", 1)[0].rstrip(" ,;:-") + "…"
-else:
-    short = title
 
-try:
-    raw = fetch(image_url)
-    photo = Image.open(io.BytesIO(raw)).convert("RGB")
-    if photo.width < 300 or photo.height < 180:
-        raise ValueError("photo trop petite")
-except Exception as exc:
-    raise SystemExit("La photo associée à l'actualité n'est pas exploitable : carte non générée.") from exc
-
-# Recadrage carré centré, puis léger flou uniquement sous le voile pour un rendu éditorial.
-ratio = max(W / photo.width, H / photo.height)
-photo = photo.resize((int(photo.width * ratio), int(photo.height * ratio)), Image.Resampling.LANCZOS)
-left = (photo.width - W) // 2
-top = (photo.height - H) // 2
-photo = photo.crop((left, top, left + W, top + H)).convert("RGBA")
-
-overlay = Image.new("RGBA", (W, H), (0, 0, 0, 0))
-pix = overlay.load()
+# Carte graphique originale : aucune photo de personne ni image d'article.
+im = Image.new("RGB", (W, H))
+pixels = im.load()
 for y in range(H):
-    # Photo lisible en haut, dégradé sombre sous le titre.
-    alpha = int(28 + 205 * max(0, min(1, (y - 280) / 620)) ** 1.35)
+    t = y / (H - 1)
+    base = tuple(int(NAVY[i] * (1 - t) + (10, 53, 82)[i] * t) for i in range(3))
     for x in range(W):
-        pix[x, y] = (4, 17, 29, alpha)
-photo = Image.alpha_composite(photo, overlay)
-draw = ImageDraw.Draw(photo)
+        glow = max(0.0, 1.0 - (((x - 850) / 620) ** 2 + ((y - 160) / 500) ** 2) ** 0.5)
+        pixels[x, y] = tuple(min(255, int(base[i] + glow * max(0, CYAN[i] - base[i]) * 0.22)) for i in range(3))
 
-# Identité de marque sobre, en haut.
-draw.rounded_rectangle((56, 52, 390, 132), radius=18, fill=(5, 22, 36, 205))
-draw.rounded_rectangle((56, 52, 68, 132), radius=5, fill=CYAN)
-draw.text((90, 66), "OM RADAR", font=font(37, True), fill="white")
-draw.text((62, 178), "ACTUALITÉ OM  •  LE POINT", font=font(22, True), fill=CYAN)
+draw = ImageDraw.Draw(im, "RGBA")
+# Motif abstrait de terrain de football.
+draw.rounded_rectangle((125, 230, 955, 1060), radius=390, outline=(88, 188, 235, 42), width=4)
+draw.ellipse((325, 430, 755, 860), outline=(88, 188, 235, 38), width=4)
+draw.line((540, 270, 540, 1020), fill=(88, 188, 235, 32), width=4)
+draw.rounded_rectangle((285, 255, 795, 430), radius=10, outline=(88, 188, 235, 30), width=4)
+draw.rounded_rectangle((285, 865, 795, 1040), radius=10, outline=(88, 188, 235, 30), width=4)
 
-# Panneau sombre translucide au bas de la photo.
-draw.rounded_rectangle((48, 610, 1032, 1015), radius=28, fill=(4, 17, 29, 222))
-draw.rounded_rectangle((80, 650, 91, 965), radius=5, fill=CYAN)
-f = font(48, True)
-lines = wrap(draw, short, f, 850, 4)
-y = 650
+draw.rounded_rectangle((58, 55, 430, 145), radius=22, fill=(3, 16, 30, 225))
+draw.rounded_rectangle((58, 55, 72, 145), radius=7, fill=CYAN + (255,))
+draw.text((98, 73), "OM RADAR", font=font(42, True), fill=(255,255,255,255))
+draw.text((62, 190), "LE POINT SUR L’OM", font=font(23, True), fill=CYAN + (255,))
+draw.rounded_rectangle((48, 490, 1032, 965), radius=30, fill=(3, 16, 30, 232), outline=(88, 188, 235, 100), width=2)
+draw.rounded_rectangle((82, 535, 94, 885), radius=6, fill=CYAN + (255,))
+f_title = font(49, True)
+lines = wrap(draw, title, f_title, 850, 5)
+y = 548
 for line in lines:
-    draw.text((120, y), line, font=f, fill="white", stroke_width=0)
+    draw.text((124, y), line, font=f_title, fill=(255,255,255,255))
     y += 66
-
-draw.line((120, 934, 970, 934), fill=(88, 188, 235, 190), width=2)
-draw.text((120, 953), "À RETROUVER SUR OM RADAR", font=font(20, True), fill=CYAN)
+draw.line((124, 890, 955, 890), fill=(88, 188, 235, 210), width=2)
+draw.text((124, 914), "ACTUALITÉS • RÉSULTATS • ANALYSES", font=font(19, True), fill=CYAN + (255,))
+draw.text((62, 1015), "omradar.github.io/om-radar", font=font(18), fill=(225,238,248,210))
 
 OUT.parent.mkdir(parents=True, exist_ok=True)
 photo.convert("RGB").save(OUT, "JPEG", quality=93, optimize=True)
