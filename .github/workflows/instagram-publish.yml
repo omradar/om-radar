@@ -46,8 +46,8 @@ jobs:
             echo "Secret INSTAGRAM_ACCESS_TOKEN absent ou vide."
             exit 1
           fi
-      - name: Publier sur Instagram
-        if: ${{ github.event_name == 'workflow_dispatch' && inputs.publier }}
+      - name: Publier sur Instagram (désactivé en attendant validation du contenu)
+        if: false
         env:
           INSTAGRAM_ACCESS_TOKEN: ${{ secrets.INSTAGRAM_ACCESS_TOKEN }}
           IMAGE_URL: ${{ steps.card.outputs.image_url }}
