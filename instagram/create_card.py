@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Prépare une carte Instagram photo-first pour OM Radar. Ne publie jamais."""
+"""Prépare une carte Instagram photo-first pour OM Radar. Brouillon uniquement, aucune publication automatique."""
 import html
 import io
 import re
