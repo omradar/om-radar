@@ -22,6 +22,14 @@
       "max": 8
     },
     {
+      "name": "FootMarseille",
+      "category": "auto",
+      "url": "https://www.footmarseille.com/feed",
+      "only_om": false,
+      "enabled": true,
+      "max": 12
+    },
+    {
       "name": "Le Phocéen",
       "category": "auto",
       "url": "https://www.lephoceen.fr/feed/",
