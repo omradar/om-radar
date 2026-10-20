@@ -37,10 +37,10 @@
     {
       "name": "Le Phocéen",
       "category": "auto",
-      "url": "https://www.lephoceen.fr/feed/",
       "only_om": false,
       "enabled": true,
-      "max": 12
+      "max": 12,
+      "site": "https://www.lephoceen.fr/"
     },
     {
       "name": "Maxifoot",
@@ -69,10 +69,10 @@
     {
       "name": "So Foot",
       "category": "auto",
-      "url": "https://www.sofoot.com/rss.xml",
       "only_om": true,
       "enabled": true,
-      "max": 8
+      "max": 8,
+      "site": "https://www.sofoot.com/"
     },
     {
       "name": "L'Équipe",
@@ -87,8 +87,9 @@
       "category": "auto",
       "site": "https://www.laprovence.com/",
       "only_om": true,
-      "enabled": true,
-      "max": 10
+      "enabled": false,
+      "max": 10,
+      "note": "Désactivé : pas de flux RSS trouvé."
     },
     {
       "name": "Foot01",
@@ -119,8 +120,9 @@
       "category": "auto",
       "site": "https://www.mercato365.com/",
       "only_om": true,
-      "enabled": true,
-      "max": 10
+      "enabled": false,
+      "max": 10,
+      "note": "Désactivé : même flux que Football365."
     },
     {
       "name": "LiveFoot",
@@ -129,6 +131,78 @@
       "only_om": true,
       "enabled": true,
       "max": 10
+    },
+    {
+      "name": "Le10Sport",
+      "category": "auto",
+      "site": "https://le10sport.com/",
+      "only_om": true,
+      "enabled": true,
+      "max": 8
+    },
+    {
+      "name": "Foot Sur 7",
+      "category": "auto",
+      "site": "https://www.footsur7.fr/",
+      "only_om": true,
+      "enabled": true,
+      "max": 8
+    },
+    {
+      "name": "90min",
+      "category": "auto",
+      "site": "https://www.90min.com/fr",
+      "only_om": true,
+      "enabled": true,
+      "max": 8
+    },
+    {
+      "name": "20 Minutes",
+      "category": "auto",
+      "site": "https://www.20minutes.fr/sport/",
+      "only_om": true,
+      "enabled": true,
+      "max": 8
+    },
+    {
+      "name": "La Marseillaise",
+      "category": "auto",
+      "site": "https://www.lamarseillaise.fr/",
+      "only_om": true,
+      "enabled": true,
+      "max": 8
+    },
+    {
+      "name": "Made in Marseille",
+      "category": "auto",
+      "site": "https://madeinmarseille.net/",
+      "only_om": true,
+      "enabled": true,
+      "max": 8
+    },
+    {
+      "name": "Actufoot",
+      "category": "auto",
+      "site": "https://actufoot.fr/",
+      "only_om": true,
+      "enabled": true,
+      "max": 8
+    },
+    {
+      "name": "Maritima",
+      "category": "auto",
+      "site": "https://www.maritima.info/",
+      "only_om": true,
+      "enabled": true,
+      "max": 8
+    },
+    {
+      "name": "Eurosport",
+      "category": "auto",
+      "site": "https://www.eurosport.fr/football/",
+      "only_om": true,
+      "enabled": true,
+      "max": 8
     },
     {
       "name": "Sportune",
@@ -151,32 +225,36 @@
       "category": "auto",
       "site": "https://www.but.fr/",
       "only_om": true,
-      "enabled": true,
-      "max": 8
+      "enabled": false,
+      "max": 8,
+      "note": "Désactivé : pas de flux RSS trouvé."
     },
     {
       "name": "OM.fr",
       "category": "Actualités",
       "site": "https://www.om.fr/fr",
       "only_om": false,
-      "enabled": true,
-      "max": 8
+      "enabled": false,
+      "max": 8,
+      "note": "Désactivé : le site n'a pas de flux RSS public."
     },
     {
       "name": "Google Actualités",
       "kind": "google",
       "category": "Actualités",
       "url": "https://news.google.com/rss/search?q=Olympique+de+Marseille&hl=fr&gl=FR&ceid=FR:fr",
-      "enabled": true,
-      "max": 12
+      "enabled": false,
+      "max": 12,
+      "note": "Désactivé : l'adresse réelle des articles est introuvable, donc pas de photo."
     },
     {
       "name": "Google Actualités Mercato",
       "kind": "google",
       "category": "Mercato",
       "url": "https://news.google.com/rss/search?q=OM+mercato&hl=fr&gl=FR&ceid=FR:fr",
-      "enabled": true,
-      "max": 8
+      "enabled": false,
+      "max": 8,
+      "note": "Désactivé : voir Google Actualités."
     }
   ]
 }
