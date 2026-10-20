@@ -1,5 +1,8 @@
 name: Publication Instagram OM Radar
 on:
+  schedule:
+    - cron: "0 8 * * *"
+    - cron: "0 18 * * *"
   workflow_dispatch:
     inputs:
       publier:
@@ -35,7 +38,7 @@ jobs:
           fi
           echo "image_url=https://raw.githubusercontent.com/omradar/om-radar/main/instagram/latest.jpg?v=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
       - name: Vérifier que le secret est présent
-        if: ${{ inputs.publier }}
+        if: ${{ github.event_name == 'workflow_dispatch' && inputs.publier }}
         env:
           INSTAGRAM_ACCESS_TOKEN: ${{ secrets.INSTAGRAM_ACCESS_TOKEN }}
         run: |
