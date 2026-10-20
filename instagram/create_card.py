@@ -22,16 +22,16 @@ def clean(s):
 def extract_featured(page_html):
     """Titre et photo extraits du même bloc vedette ; jamais d'image choisie au hasard."""
     blocks = re.findall(
-        r'<article\\b(?=[^>]*class=["\\'][^"\\']*\\bslide\\b[^"\\']*\\bhero\\b[^"\\']*["\\'])[^>]*>(.*?)</article>',
+        r"<article\\b[^>]*class=\"[^\"]*\\bslide\\b[^\"]*\\bhero\\b[^\"]*\"[^>]*>(.*?)</article>",
         page_html, re.I | re.S
     )
     for block in blocks:
-        heading = re.search(r'<h1\\b[^>]*>(.*?)</h1>', block, re.I | re.S)
-        image = re.search(r'<img\\b(?=[^>]*class=["\\'][^"\\']*\\bbg\\b[^"\\']*["\\'])[^>]*>', block, re.I | re.S)
+        heading = re.search(r"<h1\\b[^>]*>(.*?)</h1>", block, re.I | re.S)
+        image = re.search(r"<img\\b[^>]*class=\"[^\"]*\\bbg\\b[^\"]*\"[^>]*>", block, re.I | re.S)
         if not heading or not image:
             continue
         title = clean(heading.group(1))
-        src = re.search(r'\\bsrc=["\\']([^"\\']+)["\\']', image.group(0), re.I)
+        src = re.search(r"\\bsrc=\"([^\"]+)\"", image.group(0), re.I)
         if title and src:
             return title, urllib.parse.urljoin(SITE, html.unescape(src.group(1)))
     return "", ""
