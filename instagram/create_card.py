@@ -1,40 +1,125 @@
 #!/usr/bin/env python3
-"""Prépare une carte Instagram originale à partir du titre à la une du site OM Radar."""
+"""Crée une carte OM Radar originale depuis les informations publiques du site."""
 import html
 import re
 import urllib.request
-from html.parser import HTMLParser
+from datetime import datetime
 from pathlib import Path
+from zoneinfo import ZoneInfo
+from html.parser import HTMLParser
 from PIL import Image, ImageDraw, ImageFont
 
 SITE = "https://omradar.github.io/om-radar/"
 OUT = Path("instagram/latest.jpg")
+PARIS = ZoneInfo("Europe/Paris")
 
-class HeadlineParser(HTMLParser):
+class SiteParser(HTMLParser):
     def __init__(self):
         super().__init__()
-        self.in_h1 = False
-        self.parts = []
+        self.capture_h1 = False
+        self.capture_result = False
+        self.capture_club = False
+        self.capture_me = False
+        self.headlines = []
+        self.headline = ""
+        self.result = ""
+        self.clubs = []
+        self.club = ""
+        self.me_cells = []
+        self.cell = ""
+        self.in_me_cell = False
+        self.in_row = False
+
     def handle_starttag(self, tag, attrs):
-        if tag.lower() == "h1":
-            self.in_h1 = True
+        a = dict(attrs)
+        classes = a.get("class", "").split()
+        if tag == "h1" and "slide" not in classes:
+            self.capture_h1 = True
+            self.headline = ""
+        if "result" in classes:
+            self.capture_result = True
+            self.result = ""
+        if "club" in classes:
+            self.capture_club = True
+            self.club = ""
+        if tag == "tr" and "me" in classes:
+            self.in_row = True
+            self.me_cells = []
+        if self.in_row and tag == "td":
+            self.in_me_cell = True
+            self.cell = ""
+
     def handle_endtag(self, tag):
-        if tag.lower() == "h1":
-            self.in_h1 = False
+        if tag == "h1" and self.capture_h1:
+            self.capture_h1 = False
+            text = clean(self.headline)
+            if text and text not in self.headlines:
+                self.headlines.append(text)
+        if tag == "span" and self.capture_result:
+            self.capture_result = False
+            self.result = clean(self.result)
+        if tag == "span" and self.capture_club:
+            self.capture_club = False
+            name = clean(self.club)
+            if name:
+                self.clubs.append(name)
+        if tag == "td" and self.in_me_cell:
+            self.in_me_cell = False
+            self.me_cells.append(clean(self.cell))
+        if tag == "tr" and self.in_row:
+            self.in_row = False
+
     def handle_data(self, data):
-        if self.in_h1:
-            text = data.strip()
-            if text:
-                self.parts.append(text)
+        if self.capture_h1:
+            self.headline += " " + data
+        if self.capture_result:
+            self.result += " " + data
+        if self.capture_club:
+            self.club += " " + data
+        if self.in_me_cell:
+            self.cell += " " + data
+
+def clean(value):
+    return re.sub(r"\\s+", " ", html.unescape(value or "")).strip()
 
 req = urllib.request.Request(SITE, headers={"User-Agent": "OM-Radar-Instagram/1.0"})
 with urllib.request.urlopen(req, timeout=20) as response:
     page = response.read().decode("utf-8", "replace")
-parser = HeadlineParser()
+parser = SiteParser()
 parser.feed(page)
-title = re.sub(r"\s+", " ", html.unescape(" ".join(parser.parts))).strip()
-if not title:
-    title = "Toute l'actualité de l'Olympique de Marseille"
+
+# À 10 h : actualité. À 20 h : résultat et chiffres du classement.
+hour = datetime.now(PARIS).hour
+if 15 <= hour < 23:
+    kind = "RÉSULTATS & STATS"
+    title = ""
+    # Le site présente le dernier score avec les noms des équipes.
+    match = re.search(r'<div class="scoreboard">.*?</div>.*?<div class="meta">', page, re.S)
+    if match:
+        block = match.group(0)
+        clubs = [clean(x) for x in re.findall(r'<div class="club">.*?<span>(.*?)</span>', block, re.S)]
+        score = re.search(r'<div class="result num">([^<]+)</div>', block)
+        if clubs and score:
+            title = f"{clubs[0]} {clean(score.group(1))} {clubs[-1]}"
+    row = re.search(r'<tr class="me">(.*?)</tr>', page, re.S)
+    if row:
+        cells = [clean(x) for x in re.findall(r'<td[^>]*>(.*?)</td>', row.group(1), re.S)]
+        if len(cells) >= 4:
+            pos = re.sub(r"<.*?>", "", cells[0])
+            pts = re.sub(r"<.*?>", "", cells[2])
+            played = re.sub(r"<.*?>", "", cells[3])
+            statline = f"Ligue 1 : {pos}e · {pts} points · {played} matchs"
+        else:
+            statline = "Classement Ligue 1 sur OM Radar"
+    else:
+        statline = "Classement Ligue 1 sur OM Radar"
+    if not title:
+        title = "Le dernier résultat de l'OM"
+    subtitle = statline
+else:
+    kind = "ACTUALITÉ DU JOUR"
+    title = parser.headlines[0] if parser.headlines else "Toute l'actualité de l'Olympique de Marseille"
+    subtitle = "L'essentiel de l'OM, sur OM Radar"
 
 W, H = 1080, 1080
 img = Image.new("RGB", (W, H), "#0B1F33")
@@ -56,13 +141,11 @@ def font(size, bold=False):
     return ImageFont.load_default()
 
 draw.text((72, 80), "OM RADAR", font=font(54, True), fill="#FFFFFF")
-draw.text((76, 160), "ACTUALITÉS  •  RÉSULTATS  •  STATS", font=font(24, True), fill="#58BCEB")
+draw.text((76, 160), kind, font=font(28, True), fill="#58BCEB")
 
-# Wrap the headline into readable lines, keeping it within the square.
-f = font(58, True)
-words = title.split()
+f = font(56 if kind == "ACTUALITÉ DU JOUR" else 64, True)
 lines, line = [], ""
-for word in words:
+for word in title.split():
     candidate = (line + " " + word).strip()
     if draw.textbbox((0, 0), candidate, font=f)[2] <= 900:
         line = candidate
@@ -79,8 +162,23 @@ for part in lines:
     draw.text((76, y), part, font=f, fill="#FFFFFF")
     y += 76
 
-draw.rounded_rectangle((72, 870, 1008, 974), radius=24, fill="#58BCEB")
-draw.text((104, 900), "À retrouver sur omradar.github.io", font=font(28, True), fill="#0B1F33")
+# Bandeau secondaire avec une information complémentaire, sans inventer de chiffres.
+draw.rounded_rectangle((72, 800, 1008, 974), radius=24, fill="#58BCEB")
+subfont = font(27, True)
+words, sublines, line = subtitle.split(), [], ""
+for word in words:
+    candidate = (line + " " + word).strip()
+    if draw.textbbox((0, 0), candidate, font=subfont)[2] <= 850:
+        line = candidate
+    else:
+        if line:
+            sublines.append(line)
+        line = word
+if line:
+    sublines.append(line)
+for i, part in enumerate(sublines[:3]):
+    draw.text((104, 845 + i * 38), part, font=subfont, fill="#0B1F33")
+
 OUT.parent.mkdir(parents=True, exist_ok=True)
 img.save(OUT, "JPEG", quality=92, optimize=True)
-print("Carte préparée pour le titre :", title)
+print("Carte préparée :", kind, "|", title)
