@@ -47,7 +47,7 @@ jobs:
             exit 1
           fi
       - name: Publier sur Instagram
-        if: ${{ inputs.publier }}
+        if: ${{ github.event_name == 'workflow_dispatch' && inputs.publier }}
         env:
           INSTAGRAM_ACCESS_TOKEN: ${{ secrets.INSTAGRAM_ACCESS_TOKEN }}
           IMAGE_URL: ${{ steps.card.outputs.image_url }}
