@@ -25,6 +25,12 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
+      - name: Mémoire des photos et adresses déjà trouvées
+        uses: actions/cache@v4
+        with:
+          path: cache
+          key: news-cache-${{ github.run_id }}
+          restore-keys: news-cache-
       - name: Générer le site
         env:
           FOOTBALL_DATA_TOKEN: ${{ secrets.FOOTBALL_DATA_TOKEN }}

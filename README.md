@@ -40,7 +40,7 @@ Ouvre ensuite `dist-sample/index.html`. Ce sont des données inventées, à ne j
 - Pas de direct : le plan gratuit retarde les scores.
 - Pas de statistiques avancées (xG, tirs, possession) : réservées aux offres payantes.
 - Les textes d'analyse sont générés par modèles de phrases à partir des chiffres, sans IA payante.
-- Pas de photos : elles sont soumises à des droits. Les visuels sont des graphismes aux couleurs du logo. Tu peux ajouter tes propres images ou des images libres de droits plus tard.
+- Les photos des articles ne sont pas stockées sur le site : elles sont affichées depuis le site de l'éditeur (image de partage de l'article), avec le nom du média. Elles restent la propriété de leur éditeur. Si un média te le demande, mets `"enabled": false` sur sa source, ou `"images": false` pour tout couper. Quand aucune photo n'est trouvée, une vignette aux couleurs du site s'affiche.
 
 ## Choisir les sources de presse
 Tout se règle dans `config.json`, liste `sources`. Pour chaque média :
@@ -49,12 +49,21 @@ Tout se règle dans `config.json`, liste `sources`. Pour chaque média :
 - `only_om` : `true` si le flux parle de tout le football (le site ne garde alors que les articles sur l'OM).
 - `category` : `"auto"` classe les articles en Mercato ou Actualités d'après le titre.
 
-Après chaque mise à jour, le journal de l'exécution (onglet Actions) indique pour chaque source le nombre de titres retenus et d'images trouvées, ou ECHEC si le flux ne répond pas.
+Après chaque mise à jour, le fichier `status.json` du site (par exemple `https://omradar.github.io/om-radar/status.json`) indique pour chaque source le nombre de titres retenus, le nombre de photos trouvées et l'erreur éventuelle si le flux ne répond pas.
+
+Les sources « Google Actualités » donnent des titres de nombreux médias, mais leurs liens sont des redirections. Le site retrouve l'adresse réelle de l'article (méthode non officielle, limitée à `google_resolve_max` articles par mise à jour) pour récupérer sa photo. Si Google change son fonctionnement, ces articles gardent simplement une vignette à la place de la photo. Les noms de médias affichés se règlent dans `source_names`.
 
 Réglages généraux : `images` (`false` pour ne plus afficher aucune photo de presse), `excerpt_chars` (longueur du court extrait, `0` pour aucun), `max_news` (nombre total d'articles).
 
-## Nom de domaine
-Renseigne `"domain": "om-radar.fr"` dans `config.json` une fois le domaine acheté et configuré (voir la procédure donnée dans la conversation). Le site génère alors le fichier CNAME, le plan du site et robots.txt.
+## Nom de domaine (om-radar.fr)
+1. Achète `om-radar.fr` chez un bureau d'enregistrement (OVHcloud, Gandi, etc.).
+2. Dans sa zone DNS, supprime les enregistrements créés par défaut, puis ajoute :
+   - 4 enregistrements **A** (nom `@`) : `185.199.108.153`, `185.199.109.153`, `185.199.110.153`, `185.199.111.153`
+   - 1 enregistrement **CNAME** (nom `www`) vers `omradar.github.io`
+3. Sur GitHub : **Settings**, **Pages**, **Custom domain**, écris `om-radar.fr`, puis **Save**. Attends que GitHub affiche « DNS check successful » (de quelques minutes à 24 h), puis coche **Enforce HTTPS**.
+4. Seulement ensuite, dans `config.json`, mets `"domain": "om-radar.fr"` : le site utilise alors ce nom pour ses adresses officielles et son plan du site.
+
+Le fichier `CNAME` généré par le site est ignoré par GitHub quand on publie avec Actions : c'est le réglage de l'étape 3 qui compte.
 
 ## Fichiers utiles
 - `config.json` : sources de presse et réglages.

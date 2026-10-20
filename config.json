@@ -4,6 +4,24 @@
   "max_news": 24,
   "excerpt_chars": 160,
   "images": true,
+  "google_resolve_max": 14,
+  "source_names": {
+    "433foot.fr": "433 Foot",
+    "footmercato.net": "Foot Mercato",
+    "foot01.com": "Foot01",
+    "lephoceen.fr": "Le Phocéen",
+    "footmarseille.com": "FootMarseille",
+    "maxifoot.fr": "Maxifoot",
+    "rmcsport.bfmtv.com": "RMC Sport",
+    "bfmtv.com": "BFM",
+    "laprovence.com": "La Provence",
+    "mercato365.com": "Mercato365",
+    "sofoot.com": "So Foot",
+    "sport.fr": "Sport.fr",
+    "lequipe.fr": "L'Équipe",
+    "but.fr": "But! Football Club",
+    "om.fr": "OM.fr"
+  },
   "sources": [
     {
       "name": "Google Actualités",
@@ -60,6 +78,14 @@
       "only_om": true,
       "enabled": true,
       "max": 8
+    },
+    {
+      "name": "Maxifoot",
+      "category": "auto",
+      "url": "http://rss.maxifoot.com/football-om.xml",
+      "only_om": false,
+      "enabled": true,
+      "max": 10
     }
   ]
 }

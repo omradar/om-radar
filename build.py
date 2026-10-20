@@ -8,6 +8,7 @@ Usage :
 Si un appel à l'API échoue, le script s'arrête avec une erreur claire. Sur GitHub,
 la version déjà en ligne reste alors publiée, rien n'est écrasé.
 """
+import base64
 import hashlib
 import html
 import json
@@ -16,8 +17,10 @@ import os
 import re
 import shutil
 import sys
+import time
 import unicodedata
 import urllib.error
+import urllib.parse
 import urllib.request
 import xml.etree.ElementTree as ET
 from concurrent.futures import ThreadPoolExecutor
@@ -81,6 +84,122 @@ def http_get(url, limit=2_000_000, timeout=20):
         return resp.read(limit)
 
 
+def http_post(url, data, timeout=15):
+    headers = dict(UA)
+    headers["Content-Type"] = "application/x-www-form-urlencoded;charset=UTF-8"
+    req = urllib.request.Request(url, data=data.encode("utf-8"), headers=headers)
+    with urllib.request.urlopen(req, timeout=timeout) as resp:
+        return resp.read(1_000_000).decode("utf-8", "ignore")
+
+
+def https_url(url):
+    """Les images en http seraient bloquées sur un site en https : on tente la version https."""
+    url = (url or "").strip()
+    if url.startswith("//"):
+        url = "https:" + url
+    if url.startswith("http://"):
+        url = "https://" + url[len("http://"):]
+    return url if url.startswith("https://") else ""
+
+
+def pretty_source(raw):
+    """Un nom de média propre : « https://www.433foot.fr/ » devient « 433 Foot » (voir source_names dans config.json)."""
+    raw = (raw or "").strip()
+    host = ""
+    if raw.startswith(("http://", "https://")):
+        host = urllib.parse.urlparse(raw).netloc
+    elif re.fullmatch(r"(www\.)?[\w-]+(\.[\w-]+)+", raw):
+        host = raw
+    if not host:
+        return raw
+    host = host.lower().removeprefix("www.")
+    names = CONFIG.get("source_names", {})
+    if host in names:
+        return names[host]
+    label = host.split(".")[0]
+    return label.upper() if len(label) <= 3 else label.capitalize()
+
+
+# ---- Google Actualités : le lien du flux est une redirection, on retrouve l'adresse réelle de l'article
+# Méthode non officielle : si elle cesse de marcher, les articles concernés gardent simplement une lettre à la place de la photo.
+
+def gn_token(link):
+    p = urllib.parse.urlparse(link)
+    parts = p.path.split("/")
+    if p.netloc == "news.google.com" and len(parts) > 1 and parts[-2] in ("articles", "read"):
+        return parts[-1]
+    return ""
+
+
+def gn_legacy(token):
+    """Anciens identifiants : l'adresse de l'article est écrite dans l'identifiant lui-même."""
+    try:
+        raw = base64.urlsafe_b64decode(token + "=" * (-len(token) % 4)).decode("latin1")
+    except Exception:
+        return ""
+    if raw.startswith("\x08\x13\x22"):
+        raw = raw[3:]
+    if raw.endswith("\xd2\x01\x00"):
+        raw = raw[:-3]
+    if not raw:
+        return ""
+    length = ord(raw[0])
+    s = raw[2:length + 1] if length >= 0x80 else raw[1:length + 1]
+    return s if s.startswith("http") else ""
+
+
+def gn_parse_reply(text):
+    """Extrait l'adresse de la réponse du serveur Google."""
+    try:
+        data = json.loads(text.split("\n\n")[1])[:-2]
+        url = json.loads(data[0][2])[1]
+        return url if isinstance(url, str) and url.startswith("http") else ""
+    except Exception:
+        return ""
+
+
+def gn_resolve(token):
+    url = gn_legacy(token)
+    if url:
+        return url
+    sg = ts = None
+    for u in (f"https://news.google.com/articles/{token}", f"https://news.google.com/rss/articles/{token}"):
+        page = http_get(u, limit=500_000, timeout=10).decode("utf-8", "ignore")
+        sg = re.search(r'data-n-a-sg="([^"]+)"', page)
+        ts = re.search(r'data-n-a-ts="([^"]+)"', page)
+        if sg and ts:
+            break
+    if not (sg and ts):
+        return ""
+    inner = ('["garturlreq",[["X","X",["X","X"],null,null,1,1,"US:en",null,1,null,null,null,null,null,0,1],'
+             f'"X","X",1,[1,1,1],1,1,null,0,0,null,0],"{token}",{ts.group(1)},"{sg.group(1)}"]')
+    body = "f.req=" + urllib.parse.quote(json.dumps([[["Fbv4je", inner]]]))
+    return gn_parse_reply(http_post("https://news.google.com/_/DotsSplashUi/data/batchexecute", body))
+
+
+# ---- petit cache entre deux mises à jour (restauré par GitHub Actions), pour ne pas redemander les mêmes pages
+
+CACHE_FILE = ROOT / "cache" / "news.json"
+
+
+def load_cache():
+    try:
+        data = json.loads(CACHE_FILE.read_text(encoding="utf-8"))
+        now = time.time()
+        return {k: v for k, v in data.items()
+                if v.get("t", 0) > now - (6 * 3600 if v.get("fail") else 14 * 86400)}
+    except Exception:
+        return {}
+
+
+def save_cache(cache):
+    try:
+        CACHE_FILE.parent.mkdir(exist_ok=True)
+        CACHE_FILE.write_text(json.dumps(cache, ensure_ascii=False), encoding="utf-8")
+    except Exception as e:
+        print(f"[cache] non enregistré ({type(e).__name__})", file=sys.stderr)
+
+
 def clean_html(text):
     text = re.sub(r"<[^>]+>", " ", text or "")
     return re.sub(r"\s+", " ", html.unescape(text)).strip()
@@ -98,14 +217,14 @@ def find_image(el):
     for c in el.iter():
         n = local(c.tag)
         if n in ("content", "thumbnail", "enclosure"):
-            url = (c.get("url") or "").strip()
+            url = https_url(c.get("url"))
             kind = c.get("type") or c.get("medium") or ""
-            if url.startswith("https://") and (kind.startswith("image") or n == "thumbnail"
-                                               or re.search(r"\.(jpe?g|png|webp)(\?|$)", url, re.I)):
+            if url and (kind.startswith("image") or n == "thumbnail"
+                        or re.search(r"\.(jpe?g|png|webp)(\?|$)", url, re.I)):
                 return url
     blob = " ".join((c.text or "") for c in el.iter() if local(c.tag) in ("description", "encoded", "summary", "content"))
-    m = re.search(r"<img[^>]+src=[\"'](https://[^\"']+)[\"']", blob)
-    return m.group(1) if m else ""
+    m = re.search(r"<img[^>]+src=[\"']((?:https?:)?//[^\"']+)[\"']", blob)
+    return https_url(html.unescape(m.group(1))) if m else ""
 
 
 def parse_date(text):
@@ -147,10 +266,12 @@ def parse_feed(raw, src):
             name = child_text(el, "source")
             if name:
                 source = name
-                if title.endswith(" - " + name):
-                    title = title[: -len(name) - 3]
-            if re.fullmatch(r"[\w.-]+\.(fr|com|net|org|info|eu)", source):
-                source = source.removeprefix("www.").rsplit(".", 1)[0]
+                bare = re.sub(r"^https?://(www\.)?", "", name).rstrip("/")
+                for cand in (name, bare, pretty_source(name)):
+                    if cand and title.lower().endswith(" - " + cand.lower()):
+                        title = title[: -len(cand) - 3].rstrip()
+                        break
+            source = pretty_source(source)
             desc = ""
         cat = src.get("category", "Actualités")
         if cat == "auto":
@@ -169,14 +290,11 @@ def og_image(url):
         page = http_get(url, limit=250_000, timeout=8).decode("utf-8", "ignore")
     except Exception:
         return ""
-    for pat in (r"<meta[^>]+property=[\"']og:image[\"'][^>]*content=[\"']([^\"']+)",
-                r"<meta[^>]+content=[\"']([^\"']+)[\"'][^>]*property=[\"']og:image[\"']"):
+    for pat in (r"<meta[^>]+(?:property|name)=[\"'](?:og:image|twitter:image)[\"'][^>]*content=[\"']([^\"']+)",
+                r"<meta[^>]+content=[\"']([^\"']+)[\"'][^>]*(?:property|name)=[\"'](?:og:image|twitter:image)[\"']"):
         m = re.search(pat, page, re.I)
         if m:
-            u = html.unescape(m.group(1)).strip()
-            if u.startswith("//"):
-                u = "https:" + u
-            return u if u.startswith("https://") else ""
+            return https_url(html.unescape(m.group(1)))
     return ""
 
 
@@ -200,9 +318,19 @@ def make_slug(title, link):
     return base + "-" + hashlib.sha1(link.encode()).hexdigest()[:6]
 
 
+def sample_photo(i):
+    """Fausse photo (dessin) pour tester la mise en page hors connexion."""
+    svg = ('<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="675"><defs>'
+           '<linearGradient id="g" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#1b6fb5"/>'
+           '<stop offset="1" stop-color="#58BCEB"/></linearGradient></defs><rect width="1200" height="675" fill="url(#g)"/>'
+           '<circle cx="900" cy="250" r="170" fill="#ffffff" fill-opacity=".18"/>'
+           f'<text x="60" y="620" font-size="64" font-family="Arial" fill="#ffffff" fill-opacity=".85">PHOTO TEST {i + 1}</text></svg>')
+    return "data:image/svg+xml;utf8," + urllib.parse.quote(svg)
+
+
 def load_news(sample):
-    """Titres, source, image, court extrait et lien. Un flux en échec est ignoré, le compte rendu est dans le journal."""
-    items = []
+    """Titres, source, image, court extrait et lien. Un flux en échec est ignoré, le compte rendu va dans le journal et dans status.json."""
+    items, errors = [], {}
     if sample:
         now = datetime.now(timezone.utc).isoformat()
         for i, (t, c) in enumerate([
@@ -213,7 +341,7 @@ def load_news(sample):
                 ("Autre titre mercato d'exemple", "Mercato"), ("Dernier titre d'exemple", "Actualités")]):
             items.append({"title": t, "source": "Source test", "category": c, "link": "https://example.com/" + str(i),
                           "src": "test", "iso": now, "google": False,
-                          "image": "https://example.invalid/photo.jpg" if i < 3 else "",
+                          "image": sample_photo(i) if i in (0, 1, 2, 5) else "",
                           "excerpt_raw": "Court extrait d'exemple pour vérifier l'affichage du résumé sous le titre de l'article."})
     else:
         for src in CONFIG.get("sources", []):
@@ -222,7 +350,8 @@ def load_news(sample):
             try:
                 got = parse_feed(http_get(src["url"]), src)
             except Exception as e:
-                print(f"[source] {src['name']} : ECHEC ({type(e).__name__})", file=sys.stderr)
+                errors[src["name"]] = f"{type(e).__name__} {getattr(e, 'code', '')}".strip()
+                print(f"[source] {src['name']} : ECHEC ({errors[src['name']]})", file=sys.stderr)
                 continue
             items += got
 
@@ -233,39 +362,81 @@ def load_news(sample):
             continue
         seen.add(key)
         seen.add(n["link"])
+        n["orig"] = n["link"]
         uniq.append(n)
     uniq.sort(key=lambda n: n["iso"] or "", reverse=True)
     uniq = uniq[: CONFIG.get("max_news", 24)]
 
+    resolved = 0
     if not CONFIG.get("images", True):
         for n in uniq:
             n["image"] = ""
     elif not sample:
-        todo = [n for n in uniq if not n["image"] and not n["google"]]
+        cache = load_cache()
+        # 1) adresse réelle des articles qui arrivent par Google Actualités
+        budget = CONFIG.get("google_resolve_max", 14)
+        for n in uniq:
+            tok = gn_token(n["link"]) if n["google"] else ""
+            if not tok:
+                continue
+            ent = cache.get("g:" + tok)
+            if ent is None:
+                if budget <= 0:
+                    continue
+                budget -= 1
+                try:
+                    real = gn_resolve(tok)
+                except Exception:
+                    real = ""
+                ent = cache["g:" + tok] = {"url": real, "t": time.time(), "fail": not real}
+                time.sleep(0.4)
+            if ent["url"]:
+                n["link"] = ent["url"]
+                n["resolved"] = True
+                resolved += 1
+        # un même article peut arriver par deux chemins : on garde le premier
+        links, keep = set(), []
+        for n in uniq:
+            if n["link"] in links:
+                continue
+            links.add(n["link"])
+            keep.append(n)
+        uniq = keep
+        # 2) photo de l'article (page de l'éditeur : image de partage)
+        todo = [n for n in uniq if not n["image"] and (not n["google"] or n.get("resolved"))]
+
+        def photo(n):
+            ent = cache.get("i:" + n["link"])
+            return ent["url"] if ent is not None else og_image(n["link"])
+
         with ThreadPoolExecutor(max_workers=6) as ex:
-            for n, img in zip(todo, ex.map(lambda x: og_image(x["link"]), todo)):
+            for n, img in zip(todo, ex.map(photo, todo)):
                 n["image"] = img
+                cache.setdefault("i:" + n["link"], {"url": img, "t": time.time(), "fail": not img})
+        save_cache(cache)
 
     limit = CONFIG.get("excerpt_chars", 160)
     for n in uniq:
         n["excerpt"] = make_excerpt(n.pop("excerpt_raw", ""), n["title"], limit)
-        n["slug"] = make_slug(n["title"], n["link"])
+        n["slug"] = make_slug(n["title"], n["orig"])
 
-    if not sample:
-        by = {}
-        for n in uniq:
-            t = by.setdefault(n["src"], [0, 0])
-            t[0] += 1
-            t[1] += 1 if n["image"] else 0
-        for src in CONFIG.get("sources", []):
-            if src.get("enabled", True):
-                c = by.get(src["name"], [0, 0])
-                print(f"[source] {src['name']} : {c[0]} titres retenus, {c[1]} avec image")
+    stats = []
+    for src in CONFIG.get("sources", []) if not sample else []:
+        if not src.get("enabled", True):
+            continue
+        mine = [n for n in uniq if n["src"] == src["name"]]
+        row = {"name": src["name"], "kept": len(mine), "with_image": sum(1 for n in mine if n["image"])}
+        if src.get("kind") == "google":
+            row["adresse_reelle_trouvee"] = sum(1 for n in mine if n.get("resolved"))
+        if src["name"] in errors:
+            row["erreur"] = errors[src["name"]]
+        stats.append(row)
+        print(f"[source] {row}")
     counts = {}
     for n in uniq:
         counts[n["source"]] = counts.get(n["source"], 0) + 1
     names = [k for k, _ in sorted(counts.items(), key=lambda kv: -kv[1])][:12]
-    return uniq, names
+    return uniq, names, stats
 
 
 # ---------------------------------------------------------------- calculs
@@ -763,7 +934,7 @@ def main():
     sample = "--sample" in sys.argv
     out = ROOT / ("dist-sample" if sample else "dist")
     standings, matches, scorers = load_data(sample)
-    news, source_names = load_news(sample)
+    news, source_names, stats = load_news(sample)
     index_html, pages, slugs, base = render(standings, matches, scorers, news, source_names, sample)
     if out.exists():
         shutil.rmtree(out)
@@ -773,6 +944,19 @@ def main():
     for slug, page in pages.items():
         (out / "actu" / f"{slug}.html").write_text(page, encoding="utf-8")
     (out / ".nojekyll").write_text("", encoding="utf-8")
+    home = (base or "") + "/"
+    (out / "404.html").write_text(
+        '<!doctype html><html lang="fr"><meta charset="utf-8">'
+        f'<meta http-equiv="refresh" content="3;url={html.escape(home)}">'
+        '<meta name="viewport" content="width=device-width, initial-scale=1"><title>Page introuvable | OM Radar</title>'
+        '<body style="font-family:sans-serif;background:#0B1F33;color:#fff;text-align:center;padding:15vh 16px">'
+        "<h1>Cet article n'est plus à la une</h1><p>Retour à l'accueil dans quelques secondes.</p>"
+        f'<p><a style="color:#58BCEB" href="{html.escape(home)}">Aller tout de suite à OM Radar</a></p></body></html>',
+        encoding="utf-8")
+    if not sample:
+        (out / "status.json").write_text(json.dumps(
+            {"mis_a_jour": datetime.now(PARIS).isoformat(timespec="minutes"), "articles": len(news), "sources": stats},
+            ensure_ascii=False, indent=1), encoding="utf-8")
     domain = CONFIG.get("domain", "").strip()
     if domain and not sample:
         (out / "CNAME").write_text(domain + "\n", encoding="utf-8")
