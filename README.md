@@ -4,7 +4,8 @@ Site média indépendant sur l'Olympique de Marseille. Il se régénère tout se
 
 - résultats, classement et buteurs de Ligue 1 (football-data.org, plan gratuit)
 - radar de jeu et probabilités du prochain match (calculés par `build.py`)
-- titres de presse (titre, source, lien uniquement) via des flux RSS Google Actualités
+- titres de presse avec image et court extrait, via les flux RSS des médias que tu choisis (fichier `config.json`)
+- une fiche d'article sur le site pour chaque titre, avec un bouton vers l'article d'origine
 
 Aucun abonnement. Seul le nom de domaine, optionnel, est payant.
 
@@ -41,8 +42,22 @@ Ouvre ensuite `dist-sample/index.html`. Ce sont des données inventées, à ne j
 - Les textes d'analyse sont générés par modèles de phrases à partir des chiffres, sans IA payante.
 - Pas de photos : elles sont soumises à des droits. Les visuels sont des graphismes aux couleurs du logo. Tu peux ajouter tes propres images ou des images libres de droits plus tard.
 
+## Choisir les sources de presse
+Tout se règle dans `config.json`, liste `sources`. Pour chaque média :
+- `enabled` : `true` pour l'utiliser, `false` pour l'écarter.
+- `url` : adresse de son flux RSS.
+- `only_om` : `true` si le flux parle de tout le football (le site ne garde alors que les articles sur l'OM).
+- `category` : `"auto"` classe les articles en Mercato ou Actualités d'après le titre.
+
+Après chaque mise à jour, le journal de l'exécution (onglet Actions) indique pour chaque source le nombre de titres retenus et d'images trouvées, ou ECHEC si le flux ne répond pas.
+
+Réglages généraux : `images` (`false` pour ne plus afficher aucune photo de presse), `excerpt_chars` (longueur du court extrait, `0` pour aucun), `max_news` (nombre total d'articles).
+
+## Nom de domaine
+Renseigne `"domain": "om-radar.fr"` dans `config.json` une fois le domaine acheté et configuré (voir la procédure donnée dans la conversation). Le site génère alors le fichier CNAME, le plan du site et robots.txt.
+
 ## Fichiers utiles
-- `config.json` : flux de presse à suivre.
+- `config.json` : sources de presse et réglages.
 - `build.py` : récupération des données, calculs, génération du site.
 - `templates/index.html` et `assets/style.css` : design.
 - `.github/workflows/update.yml` : planning de mise à jour.

@@ -8,15 +8,19 @@ Usage :
 Si un appel à l'API échoue, le script s'arrête avec une erreur claire. Sur GitHub,
 la version déjà en ligne reste alors publiée, rien n'est écrasé.
 """
+import hashlib
 import html
 import json
 import math
 import os
+import re
 import shutil
 import sys
+import unicodedata
 import urllib.error
 import urllib.request
 import xml.etree.ElementTree as ET
+from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timezone
 from pathlib import Path
 from zoneinfo import ZoneInfo
@@ -62,47 +66,206 @@ def load_data(sample):
     return standings, matches, scorers
 
 
+UA = {"User-Agent": "Mozilla/5.0 (compatible; OM-Radar/1.0)"}
+OM_RE = re.compile(r"marseill|\bOM\b|olympien|v[ée]lodrome|phoc[ée]en|commanderie", re.I)
+MERCATO_RE = re.compile(r"mercato|transfert|recrue|\bpr[êe]t\b|signature|\bsigne\b|offre|piste|arriv[ée]e|d[ée]part|prolong|indemnit|\bcible\b", re.I)
+
+
+def local(tag):
+    return tag.rsplit("}", 1)[-1].lower()
+
+
+def http_get(url, limit=2_000_000, timeout=20):
+    req = urllib.request.Request(url, headers=UA)
+    with urllib.request.urlopen(req, timeout=timeout) as resp:
+        return resp.read(limit)
+
+
+def clean_html(text):
+    text = re.sub(r"<[^>]+>", " ", text or "")
+    return re.sub(r"\s+", " ", html.unescape(text)).strip()
+
+
+def child_text(el, *names):
+    for c in el:
+        if local(c.tag) in names and (c.text or "").strip():
+            return c.text.strip()
+    return ""
+
+
+def find_image(el):
+    """Image déclarée dans le flux : media:content, thumbnail, enclosure, ou balise img du texte."""
+    for c in el.iter():
+        n = local(c.tag)
+        if n in ("content", "thumbnail", "enclosure"):
+            url = (c.get("url") or "").strip()
+            kind = c.get("type") or c.get("medium") or ""
+            if url.startswith("https://") and (kind.startswith("image") or n == "thumbnail"
+                                               or re.search(r"\.(jpe?g|png|webp)(\?|$)", url, re.I)):
+                return url
+    blob = " ".join((c.text or "") for c in el.iter() if local(c.tag) in ("description", "encoded", "summary", "content"))
+    m = re.search(r"<img[^>]+src=[\"'](https://[^\"']+)[\"']", blob)
+    return m.group(1) if m else ""
+
+
+def parse_date(text):
+    from email.utils import parsedate_to_datetime
+    text = (text or "").strip()
+    if not text:
+        return ""
+    try:
+        return parsedate_to_datetime(text).astimezone(timezone.utc).isoformat()
+    except Exception:
+        pass
+    try:
+        return datetime.fromisoformat(text.replace("Z", "+00:00")).astimezone(timezone.utc).isoformat()
+    except Exception:
+        return ""
+
+
+def parse_feed(raw, src):
+    root = ET.fromstring(raw)
+    out = []
+    for el in root.iter():
+        if local(el.tag) not in ("item", "entry"):
+            continue
+        title = clean_html(child_text(el, "title"))
+        link = child_text(el, "link")
+        if not link:
+            for c in el:
+                if local(c.tag) == "link" and c.get("href") and c.get("rel", "alternate") == "alternate":
+                    link = c.get("href")
+                    break
+        if not title or not link.startswith(("https://", "http://")):
+            continue
+        desc = clean_html(child_text(el, "description", "summary", "encoded", "content"))
+        if src.get("only_om") and not OM_RE.search(title + " " + desc):
+            continue
+        source = src["name"]
+        google = src.get("kind") == "google"
+        if google:
+            name = child_text(el, "source")
+            if name:
+                source = name
+                if title.endswith(" - " + name):
+                    title = title[: -len(name) - 3]
+            if re.fullmatch(r"[\w.-]+\.(fr|com|net|org|info|eu)", source):
+                source = source.removeprefix("www.").rsplit(".", 1)[0]
+            desc = ""
+        cat = src.get("category", "Actualités")
+        if cat == "auto":
+            cat = "Mercato" if MERCATO_RE.search(title) else "Actualités"
+        out.append({
+            "title": title, "source": source, "category": cat, "link": link, "src": src["name"],
+            "iso": parse_date(child_text(el, "pubdate", "published", "updated", "date")),
+            "image": "" if google else find_image(el), "excerpt_raw": desc, "google": google})
+        if len(out) >= src.get("max", 12):
+            break
+    return out
+
+
+def og_image(url):
+    try:
+        page = http_get(url, limit=250_000, timeout=8).decode("utf-8", "ignore")
+    except Exception:
+        return ""
+    for pat in (r"<meta[^>]+property=[\"']og:image[\"'][^>]*content=[\"']([^\"']+)",
+                r"<meta[^>]+content=[\"']([^\"']+)[\"'][^>]*property=[\"']og:image[\"']"):
+        m = re.search(pat, page, re.I)
+        if m:
+            u = html.unescape(m.group(1)).strip()
+            if u.startswith("//"):
+                u = "https:" + u
+            return u if u.startswith("https://") else ""
+    return ""
+
+
+def make_excerpt(desc, title, limit):
+    d = (desc or "").strip()
+    if not d or limit <= 0:
+        return ""
+    if d.lower().startswith(title.lower()):
+        d = d[len(title):].lstrip(" :-.")
+    d = re.sub(r"(The post .*? appeared first on .*|Lire la suite.*|Continue reading.*|\[…\]|\[\.\.\.\])$", "", d, flags=re.I).strip()
+    if len(d) < 40:
+        return ""
+    if len(d) > limit:
+        d = d[:limit].rsplit(" ", 1)[0].rstrip(",;:. ") + "…"
+    return d
+
+
+def make_slug(title, link):
+    base = unicodedata.normalize("NFKD", title).encode("ascii", "ignore").decode()
+    base = re.sub(r"[^a-z0-9]+", "-", base.lower()).strip("-")[:60].strip("-") or "article"
+    return base + "-" + hashlib.sha1(link.encode()).hexdigest()[:6]
+
+
 def load_news(sample):
-    """Titres, source, catégorie et lien uniquement. Un flux en échec est ignoré."""
+    """Titres, source, image, court extrait et lien. Un flux en échec est ignoré, le compte rendu est dans le journal."""
+    items = []
     if sample:
         now = datetime.now(timezone.utc).isoformat()
-        return [
-            {"title": "Titre d'exemple pour tester la mise en page", "source": "Source test", "category": "Actualités", "link": "https://example.com", "iso": now},
-            {"title": "Deuxième titre d'exemple, un peu plus long pour vérifier le retour à la ligne", "source": "Source test", "category": "Actualités", "link": "https://example.com", "iso": now},
-            {"title": "Troisième titre d'exemple", "source": "Source test", "category": "Actualités", "link": "https://example.com", "iso": now},
-            {"title": "Quatrième titre d'exemple", "source": "Source test", "category": "Actualités", "link": "https://example.com", "iso": now},
-            {"title": "Titre mercato d'exemple", "source": "Source test", "category": "Mercato", "link": "https://example.com", "iso": now},
-            {"title": "Autre titre mercato d'exemple", "source": "Source test", "category": "Mercato", "link": "https://example.com", "iso": now},
-        ]
-    from email.utils import parsedate_to_datetime
-    items, seen = [], set()
-    for feed in CONFIG.get("feeds", []):
-        try:
-            req = urllib.request.Request(feed["url"], headers={"User-Agent": "OM-Radar/1.0"})
-            with urllib.request.urlopen(req, timeout=20) as resp:
-                root = ET.fromstring(resp.read())
-            for it in root.iter("item"):
-                title = (it.findtext("title") or "").strip()
-                link = (it.findtext("link") or "").strip()
-                if not title or not link.startswith("http"):
-                    continue
-                src = (it.findtext("source") or feed["name"]).strip()
-                if title.endswith(" - " + src):
-                    title = title[: -len(src) - 3]
-                key = title.lower()
-                if key in seen:
-                    continue
-                seen.add(key)
-                try:
-                    iso = parsedate_to_datetime(it.findtext("pubDate")).astimezone(timezone.utc).isoformat()
-                except Exception:
-                    iso = ""
-                items.append({"title": title, "source": src, "category": feed.get("category", "Actualités"),
-                              "link": link, "iso": iso})
-        except Exception as e:
-            print(f"Veille ignorée pour {feed.get('name')} : {type(e).__name__}", file=sys.stderr)
-    items.sort(key=lambda n: n["iso"], reverse=True)
-    return items
+        for i, (t, c) in enumerate([
+                ("Titre d'exemple pour tester la mise en page", "Actualités"),
+                ("Deuxième titre d'exemple, un peu plus long pour vérifier le retour à la ligne", "Actualités"),
+                ("Troisième titre d'exemple", "Actualités"), ("Quatrième titre d'exemple", "Actualités"),
+                ("Cinquième titre d'exemple", "Actualités"), ("Titre mercato d'exemple", "Mercato"),
+                ("Autre titre mercato d'exemple", "Mercato"), ("Dernier titre d'exemple", "Actualités")]):
+            items.append({"title": t, "source": "Source test", "category": c, "link": "https://example.com/" + str(i),
+                          "src": "test", "iso": now, "google": False,
+                          "image": "https://example.invalid/photo.jpg" if i < 3 else "",
+                          "excerpt_raw": "Court extrait d'exemple pour vérifier l'affichage du résumé sous le titre de l'article."})
+    else:
+        for src in CONFIG.get("sources", []):
+            if not src.get("enabled", True):
+                continue
+            try:
+                got = parse_feed(http_get(src["url"]), src)
+            except Exception as e:
+                print(f"[source] {src['name']} : ECHEC ({type(e).__name__})", file=sys.stderr)
+                continue
+            items += got
+
+    seen, uniq = set(), []
+    for n in items:
+        key = re.sub(r"[^a-z0-9]+", "", n["title"].lower())
+        if key in seen or n["link"] in seen:
+            continue
+        seen.add(key)
+        seen.add(n["link"])
+        uniq.append(n)
+    uniq.sort(key=lambda n: n["iso"] or "", reverse=True)
+    uniq = uniq[: CONFIG.get("max_news", 24)]
+
+    if not CONFIG.get("images", True):
+        for n in uniq:
+            n["image"] = ""
+    elif not sample:
+        todo = [n for n in uniq if not n["image"] and not n["google"]]
+        with ThreadPoolExecutor(max_workers=6) as ex:
+            for n, img in zip(todo, ex.map(lambda x: og_image(x["link"]), todo)):
+                n["image"] = img
+
+    limit = CONFIG.get("excerpt_chars", 160)
+    for n in uniq:
+        n["excerpt"] = make_excerpt(n.pop("excerpt_raw", ""), n["title"], limit)
+        n["slug"] = make_slug(n["title"], n["link"])
+
+    if not sample:
+        by = {}
+        for n in uniq:
+            t = by.setdefault(n["src"], [0, 0])
+            t[0] += 1
+            t[1] += 1 if n["image"] else 0
+        for src in CONFIG.get("sources", []):
+            if src.get("enabled", True):
+                c = by.get(src["name"], [0, 0])
+                print(f"[source] {src['name']} : {c[0]} titres retenus, {c[1]} avec image")
+    counts = {}
+    for n in uniq:
+        counts[n["source"]] = counts.get(n["source"], 0) + 1
+    names = [k for k, _ in sorted(counts.items(), key=lambda kv: -kv[1])][:12]
+    return uniq, names
 
 
 # ---------------------------------------------------------------- calculs
@@ -345,21 +508,46 @@ def fixture_rows(matches, om_id, finished):
     return "\n".join(rows)
 
 
-def article_li(n, idx, summary=""):
+def page_href(n, prefix):
+    return f"{prefix}{n['slug']}.html"
+
+
+def thumb_html(n, idx):
     letter = esc(initials(n["source"]))
-    p = f"<p>{esc(summary)}</p>" if summary else ""
-    return (f'<li><div class="thumb t{idx % 4 + 1}" aria-hidden="true">{letter}</div><div>'
-            f'<span class="cat">{esc(n["category"])}</span>'
-            f'<h3><a href="{esc(n["link"])}" target="_blank" rel="noopener">{esc(n["title"])}</a></h3>{p}'
+    img = ""
+    if n.get("image"):
+        img = f'<img src="{esc(n["image"])}" alt="" loading="lazy" referrerpolicy="no-referrer" onerror="this.remove()">'
+    return f'<div class="thumb t{idx % 4 + 1}" aria-hidden="true"><span>{letter}</span>{img}</div>'
+
+
+def article_li(n, idx, prefix):
+    p = f'<p>{esc(n["excerpt"])}</p>' if n.get("excerpt") else ""
+    return (f'<li>{thumb_html(n, idx)}<div><span class="cat">{esc(n["category"])}</span>'
+            f'<h3><a href="{esc(page_href(n, prefix))}">{esc(n["title"])}</a></h3>{p}'
             f'<div class="meta"><span>{esc(n["source"])}</span><span>{esc(rel_time(n["iso"]))}</span></div></div></li>')
 
 
-def compact_li(n, idx):
-    letter = esc(initials(n["source"]))
-    return (f'<li><div class="thumb t{idx % 4 + 1}" aria-hidden="true">{letter}</div><div>'
-            f'<span class="cat">{esc(n["category"])}</span>'
-            f'<h3><a href="{esc(n["link"])}" target="_blank" rel="noopener">{esc(n["title"])}</a></h3>'
+def compact_li(n, idx, prefix):
+    return (f'<li>{thumb_html(n, idx)}<div><span class="cat">{esc(n["category"])}</span>'
+            f'<h3><a href="{esc(page_href(n, prefix))}">{esc(n["title"])}</a></h3>'
             f'<div class="meta"><span>{esc(n["source"])}</span><span>{esc(rel_time(n["iso"]))}</span></div></div></li>')
+
+
+def hero_slide(n, idx):
+    img = ""
+    if n.get("image"):
+        img = f'<img class="bg" src="{esc(n["image"])}" alt="" referrerpolicy="no-referrer" onerror="this.remove()">'
+    ex = f'<p>{esc(n["excerpt"])}</p>' if n.get("excerpt") else ""
+    return (f'<article class="slide hero" aria-label="Actualité {idx + 1}">{img}<span class="big" aria-hidden="true">OM</span>'
+            f'<span class="tag">{esc(n["category"])}</span>'
+            f'<h1><a href="{esc(page_href(n, "actu/"))}">{esc(n["title"])}</a></h1>{ex}'
+            f'<div class="meta"><span>{esc(n["source"])}</span><span>{esc(rel_time(n["iso"]))}</span></div></article>')
+
+
+def fill(tpl, values):
+    for k, v in values.items():
+        tpl = tpl.replace("{{" + k + "}}", str(v))
+    return tpl
 
 
 def build_text(stats, om, finished, upcoming, pred):
@@ -400,7 +588,7 @@ def match_title(m, om_id):
     return f"OM contre {nm}" if home else f"{nm} contre OM"
 
 
-def render(standings, matches_raw, scorers_raw, news, sample):
+def render(standings, matches_raw, scorers_raw, news, source_names, sample):
     matches = matches_raw["matches"]
     total = next(t for t in standings["standings"] if t["type"] == "TOTAL")["table"]
     om_row = next((r for r in total if TEAM_KEYWORD in r["team"]["name"].lower()), None)
@@ -417,7 +605,6 @@ def render(standings, matches_raw, scorers_raw, news, sample):
     pred = predict(stats, upcoming[0]["homeTeam"]["id"], upcoming[0]["awayTeam"]["id"]) if upcoming else None
 
     season = standings.get("season", {})
-    matchday = season.get("currentMatchday") or (finished[-1].get("matchday") if finished else 0)
     start = (season.get("startDate") or "")[:4]
     end = (season.get("endDate") or "")[:4]
     season_label = f"{start}/{end[2:]}" if start and end else "saison en cours"
@@ -465,38 +652,42 @@ def render(standings, matches_raw, scorers_raw, news, sample):
         last_html = ('<div class="card-dark"><span class="label">Dernier match</span>'
                      '<p>Le championnat n\'a pas encore commencé.</p></div>')
 
-    # ----- actualités
-    une_news = [n for n in news if n["category"] != "Mercato"]
-    mercato_news = [n for n in news if n["category"] == "Mercato"]
-    hero_item = une_news[0] if une_news else (mercato_news[0] if mercato_news else None)
-    rest = [n for n in news if n is not hero_item]
-    if hero_item:
-        hero_html = (
-            '<article class="hero"><span class="big" aria-hidden="true">OM</span>'
-            f'<span class="tag">{esc(hero_item["category"])}</span>'
-            f'<h1><a href="{esc(hero_item["link"])}" target="_blank" rel="noopener">{esc(hero_item["title"])}</a></h1>'
-            f'<div class="meta"><span>{esc(hero_item["source"])}</span><span>{esc(rel_time(hero_item["iso"]))}</span></div>'
-            '<div class="arrows" aria-hidden="true"><span>‹</span><span>›</span></div></article>')
+    # ----- actualités : carrousel, listes
+    pool = news[:14]
+    slides = ([n for n in pool if n.get("image")] + [n for n in pool if not n.get("image")])[:5]
+    used = {id(n) for n in slides}
+    if slides:
+        track = "".join(hero_slide(n, i) for i, n in enumerate(slides))
+        ctrl = ""
+        if len(slides) > 1:
+            ctrl = ('<div class="ctrl"><button type="button" class="prev" aria-label="Actualité précédente">‹</button>'
+                    f'<span class="count">1 / {len(slides)}</span>'
+                    '<button type="button" class="next" aria-label="Actualité suivante">›</button></div>')
+        hero_html = (f'<div class="hero-wrap" id="carousel" role="region" aria-roledescription="carrousel" aria-label="À la une">'
+                     f'<div class="track">{track}</div>{ctrl}</div>')
     elif finished:
         m = finished[-1]
         hg, ag = m["score"]["fullTime"]["home"], m["score"]["fullTime"]["away"]
         hero_html = (
-            '<article class="hero"><span class="big" aria-hidden="true">OM</span><span class="tag">Résultat</span>'
+            '<div class="hero-wrap"><article class="slide hero"><span class="big" aria-hidden="true">OM</span><span class="tag">Résultat</span>'
             f'<h1>{esc(m["homeTeam"].get("shortName") or m["homeTeam"]["name"])} {hg}-{ag} {esc(m["awayTeam"].get("shortName") or m["awayTeam"]["name"])}</h1>'
-            f'<p>Journée {m.get("matchday", "")} de Ligue 1.</p></article>')
+            f'<p>Journée {m.get("matchday", "")} de Ligue 1.</p></article></div>')
     else:
-        hero_html = '<article class="hero"><span class="tag">OM Radar</span><h1>La saison arrive</h1></article>'
+        hero_html = '<div class="hero-wrap"><article class="slide hero"><span class="tag">OM Radar</span><h1>La saison arrive</h1></article></div>'
 
     texts = build_text(stats, om, finished, upcoming, pred)
     text_html = "".join(f"<p>{esc(t)}</p>" for t in texts) or "<p>Le championnat n'a pas encore commencé.</p>"
 
-    une_list = [n for n in rest if n["category"] != "Mercato"][:6]
-    une_html = "".join(article_li(n, i, texts[i] if (i == 0 and texts) else "") for i, n in enumerate(une_list)) \
+    une_list = [n for n in news if id(n) not in used and n["category"] != "Mercato"][:6]
+    used |= {id(n) for n in une_list}
+    mercato_list = [n for n in news if id(n) not in used and n["category"] == "Mercato"][:6]
+    used |= {id(n) for n in mercato_list}
+    latest_list = [n for n in news if id(n) not in used][:8]
+    une_html = "".join(article_li(n, i, "actu/") for i, n in enumerate(une_list)) \
         or '<li class="empty">Aucun titre récupéré pour le moment.</li>'
-    mercato_html = "".join(compact_li(n, i) for i, n in enumerate(mercato_news[:6])) \
+    mercato_html = "".join(compact_li(n, i, "actu/") for i, n in enumerate(mercato_list)) \
         or '<li class="empty">Aucun titre mercato pour le moment.</li>'
-    used = {id(n) for n in une_list} | {id(n) for n in mercato_news[:6]} | {id(hero_item)}
-    latest_html = "".join(compact_li(n, i) for i, n in enumerate([n for n in news if id(n) not in used][:8])) \
+    latest_html = "".join(compact_li(n, i, "actu/") for i, n in enumerate(latest_list)) \
         or '<li class="empty">Pas d\'autres titres pour le moment.</li>'
 
     # ----- buteurs
@@ -510,48 +701,88 @@ def render(standings, matches_raw, scorers_raw, news, sample):
             s.get("assists") or 0)
         for s in scorers[:8])
 
-    form = dots(stats.get(om["id"], {"results": []})["results"])
+    domain = CONFIG.get("domain", "").strip()
+    base = ("https://" + domain) if domain else CONFIG.get("site_url", "").rstrip("/")
     now = datetime.now(PARIS)
-    tpl = (ROOT / "templates" / "index.html").read_text(encoding="utf-8")
-    values = {
+    common = {
         "SEASON": esc(season_label),
         "POSITION": esc(om_row["position"]),
         "POINTS": esc(om_row["points"]),
         "PLAYED": esc(om_row["playedGames"]),
         "GOALS": f'{om_row["goalsFor"]}-{om_row["goalsAgainst"]}',
-        "FORM": form,
+        "FORM": dots(stats.get(om["id"], {"results": []})["results"]),
+        "UPDATED": fmt_date(now),
+        "SAMPLE_BANNER": '<div class="banner">Données de test inventées. Ne pas publier.</div>' if sample else "",
+        "SOURCES_LIST": "".join(f"<li>{esc(s)}</li>" for s in source_names) or "<li>Aucune source disponible</li>",
+        "SOURCES_TEXT": esc(", ".join(source_names) or "presse en ligne"),
+        "UPCOMING": fixture_rows(upcoming[:5], om["id"], False) or '<li class="empty">Calendrier indisponible.</li>',
+        "NEXT": next_html,
+        "TEXT": text_html,
+    }
+    idx_values = dict(common)
+    idx_values.update({
+        "ROOT": "", "HOME": "",
+        "CANONICAL": f'<link rel="canonical" href="{esc(base)}/">' if base else "",
         "HERO": hero_html,
         "LASTMATCH": last_html,
         "UNE": une_html,
         "MERCATO": mercato_html,
         "LATEST": latest_html,
         "RADAR": radar_svg(radar) if radar else '<p class="note">Le radar apparaîtra après le premier match.</p>',
-        "NEXT": next_html,
-        "TEXT": text_html,
         "STANDINGS": standings_table(total, stats, om["id"]),
         "LAST": fixture_rows(list(reversed(finished))[:5], om["id"], True) or '<li class="empty">Aucun match joué.</li>',
-        "UPCOMING": fixture_rows(upcoming[:5], om["id"], False) or '<li class="empty">Calendrier indisponible.</li>',
         "SCORERS": top,
-        "UPDATED": fmt_date(now),
-        "SAMPLE_BANNER": '<div class="banner">Données de test inventées. Ne pas publier.</div>' if sample else "",
-    }
-    for k, v in values.items():
-        tpl = tpl.replace("{{" + k + "}}", str(v))
-    return tpl
+    })
+    index_html = fill((ROOT / "templates" / "index.html").read_text(encoding="utf-8"), idx_values)
+
+    # ----- pages d'articles
+    art_tpl = (ROOT / "templates" / "article.html").read_text(encoding="utf-8")
+    pages = {}
+    for n in news:
+        others = [o for o in news if o is not n][:6]
+        fig = ""
+        if n.get("image"):
+            fig = (f'<figure class="artfig"><span class="ph">{esc(initials(n["source"]))}</span>'
+                   f'<img src="{esc(n["image"])}" alt="" referrerpolicy="no-referrer" onerror="this.remove()"></figure>')
+        lead = f'<p class="lead">{esc(n["excerpt"])}</p>' if n.get("excerpt") else ""
+        desc = n.get("excerpt") or f"{n['title']} : résumé et lien vers {n['source']}, sur OM Radar."
+        vals = dict(common)
+        vals.update({
+            "ROOT": "../", "HOME": "../index.html",
+            "TITLE": esc(n["title"]), "DESC": esc(desc),
+            "CANONICAL": f'<link rel="canonical" href="{esc(base)}/actu/{n["slug"]}.html">' if base else "",
+            "CAT": esc(n["category"]), "SOURCE": esc(n["source"]), "WHEN": esc(rel_time(n["iso"])),
+            "FIGURE": fig, "LEAD": lead, "LINK": esc(n["link"]),
+            "RELATED": "".join(compact_li(o, i, "") for i, o in enumerate(others)) or '<li class="empty">Pas d\'autres titres.</li>',
+        })
+        pages[n["slug"]] = fill(art_tpl, vals)
+    return index_html, pages, [n["slug"] for n in news], base
 
 
 def main():
     sample = "--sample" in sys.argv
     out = ROOT / ("dist-sample" if sample else "dist")
     standings, matches, scorers = load_data(sample)
-    news = load_news(sample)
-    page = render(standings, matches, scorers, news, sample)
+    news, source_names = load_news(sample)
+    index_html, pages, slugs, base = render(standings, matches, scorers, news, source_names, sample)
     if out.exists():
         shutil.rmtree(out)
     shutil.copytree(ROOT / "assets", out / "assets")
-    (out / "index.html").write_text(page, encoding="utf-8")
+    (out / "index.html").write_text(index_html, encoding="utf-8")
+    (out / "actu").mkdir()
+    for slug, page in pages.items():
+        (out / "actu" / f"{slug}.html").write_text(page, encoding="utf-8")
     (out / ".nojekyll").write_text("", encoding="utf-8")
-    print(f"Site généré dans {out.name}/ ({len(page) // 1024} Ko)")
+    domain = CONFIG.get("domain", "").strip()
+    if domain and not sample:
+        (out / "CNAME").write_text(domain + "\n", encoding="utf-8")
+    if base and not sample:
+        urls = [base + "/"] + [f"{base}/actu/{s}.html" for s in slugs]
+        (out / "sitemap.xml").write_text(
+            '<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n'
+            + "\n".join(f"<url><loc>{html.escape(u)}</loc></url>" for u in urls) + "\n</urlset>\n", encoding="utf-8")
+        (out / "robots.txt").write_text(f"User-agent: *\nAllow: /\nSitemap: {base}/sitemap.xml\n", encoding="utf-8")
+    print(f"Site généré dans {out.name}/ ({len(index_html) // 1024} Ko, {len(pages)} pages d'articles)")
 
 
 if __name__ == "__main__":

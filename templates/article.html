@@ -1,0 +1,107 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>{{TITLE}} | OM Radar</title>
+<meta name="description" content="{{DESC}}">
+<meta name="theme-color" content="#0B1F33">
+<meta property="og:type" content="article">
+<meta property="og:title" content="{{TITLE}}">
+<meta property="og:description" content="{{DESC}}">
+{{CANONICAL}}
+<link rel="icon" href="{{ROOT}}assets/logo-96.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700;800&family=Barlow:wght@400;500;600&display=swap">
+<link rel="stylesheet" href="{{ROOT}}assets/style.css">
+</head>
+<body>
+{{SAMPLE_BANNER}}
+<header class="top">
+  <div class="wrap">
+    <a class="brand" href="{{HOME}}" aria-label="OM Radar, accueil"><img src="{{ROOT}}assets/logo-96.png" width="46" height="46" alt="Logo OM Radar"><span>OM <b>Radar</b></span></a>
+    <nav class="nav" aria-label="Rubriques">
+      <a href="{{HOME}}#actualites">Actualités</a>
+      <a href="{{HOME}}#mercato">Mercato</a>
+      <a href="{{HOME}}#matchs">Matchs</a>
+      <a href="{{HOME}}#analyses">Analyses</a>
+    </nav>
+    <div class="icons">
+      <button type="button" id="open-menu" aria-label="Ouvrir le menu" aria-expanded="false" aria-controls="drawer"><svg viewBox="0 0 24 24"><path d="M4 7h16M4 12h16M4 17h16"/></svg></button>
+    </div>
+  </div>
+  <nav class="chips" aria-label="Rubriques mobile">
+    <a href="{{HOME}}#actualites">Actualités</a><a href="{{HOME}}#mercato">Mercato</a><a href="{{HOME}}#matchs">Matchs</a><a href="{{HOME}}#analyses">Analyses</a>
+  </nav>
+</header>
+
+<div class="drawer" id="drawer" hidden>
+  <div class="panel" role="dialog" aria-modal="true" aria-label="Menu">
+    <button type="button" class="close" id="close-menu" aria-label="Fermer le menu">✕</button>
+    <nav aria-label="Menu principal">
+      <a href="{{HOME}}#actualites">Actualités</a>
+      <a href="{{HOME}}#mercato">Mercato</a>
+      <a href="{{HOME}}#matchs">Matchs et classement</a>
+      <a href="{{HOME}}#analyses">Analyses</a>
+      <a href="{{HOME}}#apropos">À propos</a>
+    </nav>
+    <div class="side-note">
+      <h4>Sources suivies</h4>
+      <ul>{{SOURCES_LIST}}</ul>
+      <p>Chiffres : football-data.org. Mise à jour {{UPDATED}}.</p>
+    </div>
+  </div>
+</div>
+
+<main class="wrap">
+  <p class="crumbs"><a href="{{HOME}}">Accueil</a> › <a href="{{HOME}}#actualites">{{CAT}}</a></p>
+  <div class="layout">
+    <div class="col">
+      <article class="artpage">
+        <span class="tag">{{CAT}}</span>
+        <h1>{{TITLE}}</h1>
+        <div class="meta"><span>{{SOURCE}}</span><span>{{WHEN}}</span></div>
+        {{FIGURE}}
+        {{LEAD}}
+        <a class="btn" href="{{LINK}}" target="_blank" rel="noopener nofollow">Lire l'article sur {{SOURCE}} ↗</a>
+        <p class="note">Titre, image et extrait appartiennent à leur éditeur. L'article complet est sur le site de {{SOURCE}}.</p>
+        <section class="radar-note">
+          <h2>Le point Radar</h2>
+          {{TEXT}}
+        </section>
+      </article>
+    </div>
+
+    <aside class="side" aria-label="Prochain match et autres actualités">
+      <div class="box">
+        <h3>Prochain match</h3>
+        <div class="next in-box">{{NEXT}}</div>
+      </div>
+      <div class="box">
+        <h3>Autres actualités</h3>
+        <ul class="compact">{{RELATED}}</ul>
+      </div>
+    </aside>
+  </div>
+</main>
+
+<footer>
+  <div class="wrap" id="apropos">
+    <div><b>OM Radar</b>, média indépendant. Sans lien officiel avec l'Olympique de Marseille.</div>
+    <div>Chiffres : football-data.org. Les titres, images et résumés de presse appartiennent à leurs éditeurs ({{SOURCES_TEXT}}).</div>
+    <div>Mis à jour : {{UPDATED}}</div>
+  </div>
+</footer>
+
+<nav class="bottombar" aria-label="Navigation principale">
+  <a href="{{HOME}}"><svg viewBox="0 0 24 24"><path d="M4 11l8-7 8 7v9h-5v-6H9v6H4z"/></svg>Accueil</a>
+  <a href="{{HOME}}#actualites" class="on"><svg viewBox="0 0 24 24"><rect x="4" y="5" width="16" height="14" rx="2"/><path d="M8 9h8M8 13h8"/></svg>Actualités</a>
+  <a href="{{HOME}}#matchs"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="8"/><path d="M12 8l3 2-1 4h-4l-1-4z"/></svg>Matchs</a>
+  <a href="{{HOME}}#mercato"><svg viewBox="0 0 24 24"><path d="M5 8h13l-3-3M19 16H6l3 3"/></svg>Mercato</a>
+  <a href="{{HOME}}#analyses"><svg viewBox="0 0 24 24"><path d="M4 4v16h16M8 16v-4M13 16V8M18 16v-6"/></svg>Plus</a>
+</nav>
+
+<script src="{{ROOT}}assets/site.js" defer></script>
+</body>
+</html>

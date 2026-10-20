@@ -6,33 +6,55 @@
 <title>OM Radar | L'actualité de l'Olympique de Marseille</title>
 <meta name="description" content="OM Radar, média indépendant sur l'Olympique de Marseille : résultats, classement, mercato et analyses chiffrées mises à jour après chaque journée.">
 <meta name="theme-color" content="#0B1F33">
-<link rel="icon" href="assets/logo-96.png">
+<meta property="og:type" content="website">
+<meta property="og:title" content="OM Radar, l'actualité de l'Olympique de Marseille">
+<meta property="og:description" content="Résultats, classement, mercato et analyses chiffrées de l'OM, mises à jour après chaque journée.">
+{{CANONICAL}}
+<link rel="icon" href="{{ROOT}}assets/logo-96.png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700;800&family=Barlow:wght@400;500;600&display=swap">
-<link rel="stylesheet" href="assets/style.css">
+<link rel="stylesheet" href="{{ROOT}}assets/style.css">
 </head>
 <body>
 {{SAMPLE_BANNER}}
 <header class="top">
   <div class="wrap">
-    <a class="brand" href="#" aria-label="OM Radar, accueil"><img src="assets/logo-96.png" width="46" height="46" alt="Logo OM Radar"><span>OM <b>Radar</b></span></a>
+    <a class="brand" href="{{HOME}}#" aria-label="OM Radar, accueil"><img src="{{ROOT}}assets/logo-96.png" width="46" height="46" alt="Logo OM Radar"><span>OM <b>Radar</b></span></a>
     <nav class="nav" aria-label="Rubriques">
-      <a href="#actualites" class="on">Actualités</a>
-      <a href="#mercato">Mercato</a>
-      <a href="#matchs">Matchs</a>
-      <a href="#analyses">Analyses</a>
+      <a href="{{HOME}}#actualites" class="on">Actualités</a>
+      <a href="{{HOME}}#mercato">Mercato</a>
+      <a href="{{HOME}}#matchs">Matchs</a>
+      <a href="{{HOME}}#analyses">Analyses</a>
     </nav>
     <div class="icons">
       <button type="button" id="open-search" aria-label="Rechercher" aria-expanded="false"><svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/></svg></button>
-      <button type="button" id="open-menu" aria-label="Menu"><svg viewBox="0 0 24 24"><path d="M4 7h16M4 12h16M4 17h16"/></svg></button>
+      <button type="button" id="open-menu" aria-label="Ouvrir le menu" aria-expanded="false" aria-controls="drawer"><svg viewBox="0 0 24 24"><path d="M4 7h16M4 12h16M4 17h16"/></svg></button>
     </div>
   </div>
   <div class="searchbar" id="searchbar" hidden><div class="wrap"><input id="q" type="search" placeholder="Filtrer les titres : mercato, Vélodrome, joueur…" aria-label="Filtrer les titres"></div></div>
   <nav class="chips" aria-label="Rubriques mobile">
-    <a href="#actualites" class="on">Actualités</a><a href="#mercato">Mercato</a><a href="#matchs">Matchs</a><a href="#analyses">Analyses</a>
+    <a href="{{HOME}}#actualites" class="on">Actualités</a><a href="{{HOME}}#mercato">Mercato</a><a href="{{HOME}}#matchs">Matchs</a><a href="{{HOME}}#analyses">Analyses</a>
   </nav>
 </header>
+
+<div class="drawer" id="drawer" hidden>
+  <div class="panel" role="dialog" aria-modal="true" aria-label="Menu">
+    <button type="button" class="close" id="close-menu" aria-label="Fermer le menu">✕</button>
+    <nav aria-label="Menu principal">
+      <a href="{{HOME}}#actualites">Actualités</a>
+      <a href="{{HOME}}#mercato">Mercato</a>
+      <a href="{{HOME}}#matchs">Matchs et classement</a>
+      <a href="{{HOME}}#analyses">Analyses</a>
+      <a href="{{HOME}}#apropos">À propos</a>
+    </nav>
+    <div class="side-note">
+      <h4>Sources suivies</h4>
+      <ul>{{SOURCES_LIST}}</ul>
+      <p>Chiffres : football-data.org. Mise à jour {{UPDATED}}.</p>
+    </div>
+  </div>
+</div>
 
 <div class="status"><div class="wrap">
   <span>Ligue 1 {{SEASON}}</span>
@@ -57,7 +79,7 @@
   <div class="layout">
     <div class="col">
       <section id="actualites">
-        <h2 class="sec">À la une <small>Titres et liens vers les sources</small></h2>
+        <h2 class="sec">À la une <small>Résumés courts, articles sur les sites des médias</small></h2>
         <ul class="articles" id="list-une">{{UNE}}</ul>
       </section>
 
@@ -129,9 +151,9 @@
 </main>
 
 <footer>
-  <div class="wrap">
+  <div class="wrap" id="apropos">
     <div><b>OM Radar</b>, média indépendant. Sans lien officiel avec l'Olympique de Marseille.</div>
-    <div>Résultats, classements et buteurs : football-data.org. Titres de presse : liens vers les sites des médias d'origine.</div>
+    <div>Chiffres : football-data.org. Les titres, images et résumés de presse appartiennent à leurs éditeurs ({{SOURCES_TEXT}}). Chaque fiche renvoie vers l'article d'origine.</div>
     <div>Mis à jour : {{UPDATED}}</div>
   </div>
 </footer>
@@ -144,38 +166,6 @@
   <a href="#analyses"><svg viewBox="0 0 24 24"><path d="M4 4v16h16M8 16v-4M13 16V8M18 16v-6"/></svg>Plus</a>
 </nav>
 
-<script>
-(function () {
-  var bar = document.getElementById("searchbar"), btn = document.getElementById("open-search"), q = document.getElementById("q");
-  btn.addEventListener("click", function () {
-    bar.hidden = !bar.hidden;
-    btn.setAttribute("aria-expanded", String(!bar.hidden));
-    if (!bar.hidden) q.focus();
-  });
-  document.getElementById("open-menu").addEventListener("click", function () {
-    document.getElementById("mercato").scrollIntoView();
-    window.scrollTo({ top: document.querySelector(".layout").offsetTop - 70, behavior: "smooth" });
-  });
-  q.addEventListener("input", function () {
-    var t = q.value.trim().toLowerCase();
-    document.querySelectorAll("#list-une li, #list-mercato li, #list-latest li").forEach(function (li) {
-      li.hidden = t !== "" && li.textContent.toLowerCase().indexOf(t) === -1;
-    });
-  });
-  var links = document.querySelectorAll(".nav a, .chips a");
-  var map = {}; links.forEach(function (a) { (map[a.getAttribute("href")] = map[a.getAttribute("href")] || []).push(a); });
-  if ("IntersectionObserver" in window) {
-    var io = new IntersectionObserver(function (es) {
-      es.forEach(function (e) {
-        if (e.isIntersecting) {
-          links.forEach(function (a) { a.classList.remove("on"); });
-          (map["#" + e.target.id] || []).forEach(function (a) { a.classList.add("on"); });
-        }
-      });
-    }, { rootMargin: "-30% 0px -60% 0px" });
-    ["actualites", "mercato", "matchs", "analyses"].forEach(function (id) { var el = document.getElementById(id); if (el) io.observe(el); });
-  }
-})();
-</script>
+<script src="{{ROOT}}assets/site.js" defer></script>
 </body>
 </html>
