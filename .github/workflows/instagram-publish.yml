@@ -59,11 +59,12 @@ jobs:
             echo "Instagram n'a pas retourné l'identifiant du compte."
             exit 1
           fi
-          caption="OM Radar ⚽
-Actualités, résultats et statistiques de l'Olympique de Marseille.
-À lire sur https://omradar.github.io/om-radar/
-
-#OM #TeamOM #OlympiqueDeMarseille #Football"
+          caption="$(printf '%s\n' \
+            'OM Radar ⚽' \
+            "Actualités, résultats et statistiques de l'Olympique de Marseille." \
+            'À lire sur https://omradar.github.io/om-radar/' \
+            '' \
+            '#OM #TeamOM #OlympiqueDeMarseille #Football')"
           container="$(curl --silent --show-error --fail-with-body --request POST "https://graph.instagram.com/${user_id}/media" \
             --data-urlencode "image_url=${IMAGE_URL}" \
             --data-urlencode "caption=${caption}" \
