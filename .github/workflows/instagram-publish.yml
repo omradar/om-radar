@@ -1,5 +1,8 @@
 name: Publication Instagram OM Radar
 on:
+  push:
+    paths:
+      - "instagram/create_card.py"
   schedule:
     - cron: "0 8 * * *"
     - cron: "0 18 * * *"
