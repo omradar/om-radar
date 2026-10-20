@@ -35,7 +35,7 @@ class FeaturedTitle(HTMLParser):
             self.parts.append(data)
     def handle_endtag(self, tag):
         if self.in_hero and tag in ("h1", "h2") and self.in_heading:
-            self.title = re.sub(r"\\s+", " ", html.unescape(" ".join(self.parts))).strip()
+            self.title = re.sub(r"\s+", " ", html.unescape(" ".join(self.parts))).strip()
             self.in_heading = False
         elif tag == "article" and self.in_hero:
             self.in_hero = False
@@ -78,7 +78,7 @@ with urllib.request.urlopen(req, timeout=20) as response:
 parser = FeaturedTitle()
 parser.feed(page_html)
 title = parser.title or "L’actualité de l’Olympique de Marseille"
-title = re.sub(r"\\s+", " ", title).strip()
+title = re.sub(r"\s+", " ", title).strip()
 
 # Fond bleu nuit texturé avec accents graphiques abstraits, sans photo ni portrait.
 im = Image.new("RGB", (W, H), NAVY)
