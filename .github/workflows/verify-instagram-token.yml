@@ -1,0 +1,25 @@
+name: Vérifier le jeton Instagram
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  verify-token:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Vérifier le jeton Instagram Login
+        env:
+          INSTAGRAM_ACCESS_TOKEN: ${{ secrets.INSTAGRAM_ACCESS_TOKEN }}
+        run: |
+          set -euo pipefail
+          if [ -z "${INSTAGRAM_ACCESS_TOKEN:-}" ]; then
+            echo "ERREUR: le secret INSTAGRAM_ACCESS_TOKEN est absent ou vide."
+            exit 1
+          fi
+          response="$(curl --silent --show-error --fail-with-body --get "https://graph.instagram.com/me" \
+            --data-urlencode "fields=user_id,username" \
+            --data-urlencode "access_token=${INSTAGRAM_ACCESS_TOKEN}")" || {
+              echo "ERREUR: Instagram a refusé la requête. Vérifie le type de jeton et sa validité; le jeton n'est pas affiché."
+              exit 1
+            }
+          python -c 'import json,sys; d=json.load(sys.stdin); print("Connexion Instagram validée."); print("Nom du compte :", d.get("username", "non retourné")); print("ID Instagram :", d.get("user_id", d.get("id", "non retourné")))' <<< "$response"
