@@ -1,49 +1,35 @@
 name: OM Radar Instagram approval
 
-on:
-  workflow_dispatch:
-    inputs:
-      approve:
-        description: "Type yes only after checking the image"
-        type: choice
-        required: true
-        default: "no"
-        options:
-          - "no"
-          - "yes"
+on: [workflow_dispatch]
 
 permissions:
   contents: write
-
-concurrency:
-  group: om-radar-instagram-publish
-  cancel-in-progress: false
 
 jobs:
   publish:
     runs-on: ubuntu-latest
     steps:
-      - name: Stop unless explicitly approved
-        if: ${{ inputs.approve != 'yes' }}
+      - name: Check explicit approval
+        env:
+          APPROVAL: ${{ inputs.confirmation }}
         run: |
-          echo "Not approved. Nothing will be published."
-          exit 0
-
+          if [ "$APPROVAL" != "PUBLISH" ]; then
+            echo "Approval not given; nothing will be published."
+            exit 0
+          fi
       - name: Checkout repository
-        if: ${{ inputs.approve == 'yes' }}
+        if: ${{ inputs.confirmation == 'PUBLISH' }}
         uses: actions/checkout@v4
         with:
           persist-credentials: true
-
       - name: Publish approved draft
-        if: ${{ inputs.approve == 'yes' }}
+        if: ${{ inputs.confirmation == 'PUBLISH' }}
         env:
           INSTAGRAM_ACCESS_TOKEN: ${{ secrets.INSTAGRAM_ACCESS_TOKEN }}
           CONFIRM_PUBLISH: "oui"
         run: python scripts/publish_approved.py
-
       - name: Save publication state
-        if: ${{ inputs.approve == 'yes' }}
+        if: ${{ inputs.confirmation == 'PUBLISH' }}
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
