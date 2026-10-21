@@ -1,16 +1,13 @@
-name: OM Radar — valider et publier Instagram
+name: OM Radar - valider et publier Instagram
 
 on:
   workflow_dispatch:
     inputs:
-      confirm_publish:
-        description: "As-tu vérifié l'image et confirmes-tu sa publication ?"
-        type: choice
+      approve:
+        description: "Je confirme avoir vérifié le visuel et je demande sa publication"
+        type: boolean
         required: true
-        default: "non"
-        options:
-          - "non"
-          - "oui, je valide et publie"
+        default: false
 
 permissions:
   contents: write
@@ -21,7 +18,7 @@ concurrency:
 
 jobs:
   publish:
-    if: inputs.confirm_publish == 'oui, je valide et publie'
+    if: inputs.approve
     runs-on: ubuntu-latest
     steps:
       - name: Récupérer le dépôt
@@ -31,7 +28,7 @@ jobs:
       - name: Publier le brouillon explicitement validé
         env:
           INSTAGRAM_ACCESS_TOKEN: ${{ secrets.INSTAGRAM_ACCESS_TOKEN }}
-          CONFIRM_PUBLISH: ${{ inputs.confirm_publish == 'oui, je valide et publie' && 'oui' || 'non' }}
+          CONFIRM_PUBLISH: "oui"
         run: python scripts/publish_approved.py
       - name: Enregistrer l'état de publication
         run: |
@@ -45,8 +42,8 @@ jobs:
             git push
           fi
   not-approved:
-    if: inputs.confirm_publish != 'oui, je valide et publie'
+    if: ${{ !inputs.approve }}
     runs-on: ubuntu-latest
     steps:
       - name: Ne rien publier
-        run: echo "Publication annulée : sélectionne explicitement oui après vérification du visuel."
+        run: echo "Publication annulée : aucune confirmation explicite."
