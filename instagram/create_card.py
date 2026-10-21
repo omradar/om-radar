@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Génère une carte Instagram OM Radar dans le style éditorial approuvé."""
+"""Génère une carte Instagram OM Radar dans le style éditorial approuvé.\nLe push de ce fichier déclenche un aperçu GitHub sans publier sur Instagram."""
 import html
 import re
 import urllib.request
