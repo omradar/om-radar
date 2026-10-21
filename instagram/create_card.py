@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Génère une carte Instagram éditoriale OM Radar, sans photos de personnes."""
+"""Génère une carte Instagram OM Radar dans le style éditorial approuvé."""
 import html
 import re
 import urllib.request
@@ -10,11 +10,11 @@ from PIL import Image, ImageDraw, ImageFont
 SITE = "https://omradar.github.io/om-radar/"
 OUT = Path("instagram/latest.jpg")
 W = H = 1080
-NAVY = (4, 14, 31)
-NAVY2 = (7, 31, 57)
-CYAN = (48, 190, 239)
-WHITE = (247, 250, 255)
-MUTED = (166, 190, 211)
+NAVY = (6, 20, 38)
+NAVY2 = (9, 43, 75)
+CYAN = (21, 188, 233)
+WHITE = (248, 251, 255)
+MUTED = (147, 181, 202)
 UA = {"User-Agent": "Mozilla/5.0 (compatible; OM-Radar-Instagram/1.0)"}
 
 class FeaturedTitle(HTMLParser):
@@ -53,7 +53,7 @@ def font(size, bold=False):
             pass
     return ImageFont.load_default()
 
-def wrap(draw, text, f, max_width, max_lines=5):
+def wrap(draw, text, f, max_width, max_lines=4):
     words, lines, line = text.split(), [], ""
     for word in words:
         candidate = (line + " " + word).strip()
@@ -80,74 +80,77 @@ parser = FeaturedTitle()
 parser.feed(page_html)
 title = re.sub(r"\s+", " ", parser.title or "L’actualité de l’Olympique de Marseille").strip()
 
-# Utilise les deux modèles Canva comme base visuelle quand ils sont présents.
-# Le panneau éditorial opaque plus bas masque le texte d'exemple du modèle.
-from PIL import ImageOps
-is_stat = bool(re.search(r"\d|%|\b(chiffre|statistique|pourcentage|classement)\b", title, re.I))
-template_path = Path(
-    "instagram/Post Instagram carré OM Radar — Chiffre du jour.png"
-    if is_stat else "instagram/Carte actu OM Radar.png"
-)
-if template_path.exists():
-    im = ImageOps.fit(Image.open(template_path).convert("RGB"), (W, H), method=Image.Resampling.LANCZOS)
-else:
-    # Repli autonome si un modèle est absent.
-    im = Image.new("RGB", (W, H), NAVY)
-    px = im.load()
-    for y0 in range(H):
-        t = y0 / (H - 1)
-        row = tuple(int(NAVY[i] * (1-t) + NAVY2[i] * t) for i in range(3))
-        for x in range(W):
-            glow = max(0.0, 1 - (((x-900)/720)**2 + ((y0-210)/560)**2)**0.5)
-            px[x, y0] = tuple(min(255, int(row[i] + glow * (CYAN[i]-row[i]) * 0.13)) for i in range(3))
+# Fond dessiné ici : aucun texte d'exemple Canva, portrait ou statistique inventée.
+im = Image.new("RGB", (W, H), NAVY)
+pixels = im.load()
+for y in range(H):
+    t = y / (H - 1)
+    for x in range(W):
+        glow = max(0.0, 1 - (((x - 850) / 650) ** 2 + ((y - 340) / 650) ** 2) ** 0.5)
+        pixels[x, y] = tuple(
+            min(255, int(NAVY[c] * (1-t) + NAVY2[c] * t + glow * (CYAN[c] - NAVY[c]) * 0.16))
+            for c in range(3)
+        )
 
 d = ImageDraw.Draw(im, "RGBA")
-# Motif circulaire discret, lignes obliques et liseré de signature.
-d.rectangle((0, 0, 14, H), fill=(*CYAN, 255))
-d.arc((680, 105, 1250, 675), 25, 325, fill=(*CYAN, 50), width=18)
-d.arc((745, 170, 1185, 610), 25, 325, fill=(255, 255, 255, 24), width=3)
-for k in range(5):
-    d.polygon([(870+k*45, 0), (900+k*45, 0), (600+k*45, 300), (570+k*45, 300)], fill=(*CYAN, 13))
-d.polygon([(0, 1000), (185, 1000), (105, 1080), (0, 1080)], fill=(*CYAN, 230))
-d.polygon([(0, 1035), (92, 1035), (47, 1080), (0, 1080)], fill=(255, 255, 255, 235))
+d.rectangle((0, 0, 12, H), fill=(*CYAN, 255))
+d.polygon([(0, 0), (300, 0), (0, 300)], fill=(*CYAN, 240))
+d.polygon([(0, 0), (215, 0), (0, 215)], fill=(248, 251, 255, 245))
+d.polygon([(1080, 820), (820, 1080), (1080, 1080)], fill=(*CYAN, 245))
+d.polygon([(1080, 880), (880, 1080), (1080, 1080)], fill=(2, 11, 23, 255))
+d.rectangle((0, 0, W, H), fill=(0, 0, 0, 0))
+# Grille technique discrète et anneaux de radar.
+for x in range(24, W, 44):
+    d.line((x, 0, x, H), fill=(53, 199, 245, 12), width=1)
+for y in range(24, H, 44):
+    d.line((0, y, W, y), fill=(53, 199, 245, 12), width=1)
+d.arc((650, 210, 1190, 750), 20, 320, fill=(21, 188, 233, 70), width=14)
+d.arc((710, 270, 1130, 690), 20, 320, fill=(248, 251, 255, 28), width=3)
 
-# Logo du projet, sans portrait ni photo d'article.
 logo_path = Path("assets/logo-320.png")
 if logo_path.exists():
     logo = Image.open(logo_path).convert("RGBA")
-    logo.thumbnail((112, 112), Image.Resampling.LANCZOS)
+    logo.thumbnail((100, 100), Image.Resampling.LANCZOS)
     im_rgba = im.convert("RGBA")
-    im_rgba.alpha_composite(logo, (58, 42))
+    im_rgba.alpha_composite(logo, (65, 45))
     im = im_rgba.convert("RGB")
     d = ImageDraw.Draw(im, "RGBA")
-    d.text((190, 66), "OM RADAR", font=font(37, True), fill=WHITE)
+    d.text((180, 69), "OM RADAR", font=font(42, True), fill=WHITE)
 else:
-    d.text((64, 67), "OM RADAR", font=font(40, True), fill=WHITE)
+    d.text((72, 66), "OM RADAR", font=font(44, True), fill=WHITE)
 
-d.text((64, 177), "L’ACTU MARSEILLAISE, SANS DÉTOUR", font=font(19, True), fill=CYAN)
-d.line((64, 220, 1016, 220), fill=(*CYAN, 115), width=2)
-d.rounded_rectangle((64, 257, 267, 303), radius=22, fill=(*CYAN, 28), outline=(*CYAN, 175), width=2)
-d.text((84, 269), "LE POINT OM", font=font(17, True), fill=CYAN)
+d.text((180, 117), "ACTUS  ·  RÉSULTATS  ·  STATS", font=font(15, True), fill=CYAN)
+d.text((1000, 78), "ÉDITION", font=font(15, True), fill=CYAN, anchor="ra")
+d.text((1000, 106), "MARSEILLE", font=font(20, True), fill=WHITE, anchor="ra")
+d.rounded_rectangle((72, 213, 322, 260), radius=22, fill=(*CYAN, 255))
+d.text((197, 236), "LA MINUTE OM", font=font(18, True), fill=NAVY, anchor="mm")
 
-# Grand bloc éditorial, respirant et lisible en petit dans le fil Instagram.
-d.rounded_rectangle((48, 330, 1032, 860), radius=30, fill=(3, 12, 27, 252), outline=(255, 255, 255, 80), width=2)
-d.rounded_rectangle((82, 382, 92, 796), radius=5, fill=(*CYAN, 255))
-title_font = font(52, True)
-lines = wrap(d, title, title_font, 850, 5)
-if len(lines) >= 5 and any(len(line) > 24 for line in lines):
-    title_font = font(46, True)
-    lines = wrap(d, title, title_font, 850, 5)
-line_height = 74 if title_font.size >= 50 else 66
-y = 392
-for line in lines:
-    d.text((125, y), line, font=title_font, fill=WHITE)
+# Titre principal provenant du site, sans inventer de score ni de chiffres.
+title_font = font(66, True)
+lines = wrap(d, title, title_font, 900, 4)
+if len(lines) > 3:
+    title_font = font(56, True)
+    lines = wrap(d, title, title_font, 900, 4)
+if len(lines) > 3:
+    title_font = font(48, True)
+    lines = wrap(d, title, title_font, 900, 4)
+
+y = 330
+line_height = title_font.size + 22
+for i, line in enumerate(lines):
+    color = CYAN if i == min(1, len(lines)-1) else WHITE
+    d.text((72, y), line, font=title_font, fill=color, stroke_width=0)
     y += line_height
 
-# Pied de carte de marque.
-d.line((64, 900, 1016, 900), fill=(255, 255, 255, 45), width=2)
-d.text((64, 928), "ACTUALITÉS  /  RÉSULTATS  /  STATS", font=font(20, True), fill=CYAN)
-d.text((64, 982), "OMRADAR.GITHUB.IO/OM-RADAR", font=font(17), fill=MUTED)
-d.text((930, 978), "OM", font=font(40, True), fill=(255, 255, 255, 45))
+# Barre d'accent et signature de marque.
+bar_y = max(640, min(y + 22, 760))
+d.rounded_rectangle((76, bar_y, 86, bar_y + 100), radius=5, fill=(*CYAN, 255))
+d.text((112, bar_y + 10), "L’ACTUALITÉ DE L’OLYMPIQUE", font=font(23, True), fill=WHITE)
+d.text((112, bar_y + 47), "DE MARSEILLE, DÉCRYPTÉE PAR OM RADAR.", font=font(18), fill=MUTED)
+d.line((72, 875, 1008, 875), fill=(21, 188, 233, 150), width=2)
+d.text((72, 910), "UN CLUB. UNE VILLE. UNE PASSION.", font=font(20, True), fill=CYAN)
+d.text((72, 963), "OMRADAR.GITHUB.IO/OM-RADAR", font=font(17), fill=MUTED)
+d.text((1008, 965), "#OMRADAR", font=font(24, True), fill=WHITE, anchor="ra")
 
 OUT.parent.mkdir(parents=True, exist_ok=True)
 im.save(OUT, "JPEG", quality=95, optimize=True)
