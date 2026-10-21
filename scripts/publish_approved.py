@@ -5,7 +5,7 @@ import urllib.parse
 import urllib.request
 from pathlib import Path
 
-API = "https://graph.instagram.com"
+API = "https://graph.instagram.com/v26.0"
 DATA = Path("data")
 PENDING_FILE = DATA / "pending.json"
 PUBLISHED_FILE = DATA / "published.json"
