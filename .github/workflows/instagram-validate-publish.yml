@@ -1,6 +1,13 @@
 name: OM Radar Instagram approval
 
-on: [workflow_dispatch]
+on:
+  workflow_dispatch:
+    inputs:
+      confirmation:
+        description: "Enter PUBLISH only after checking the image"
+        required: true
+        type: string
+        default: "NO"
 
 permissions:
   contents: write
@@ -9,25 +16,23 @@ jobs:
   publish:
     runs-on: ubuntu-latest
     steps:
-      - name: Check explicit approval
-        env:
-          APPROVAL: ${{ inputs.confirmation }}
-        run: |
-          if [ "$APPROVAL" != "PUBLISH" ]; then
-            echo "Approval not given; nothing will be published."
-            exit 0
-          fi
+      - name: Stop unless explicitly approved
+        if: ${{ inputs.confirmation != 'PUBLISH' }}
+        run: echo "No publication: confirmation is not PUBLISH."
+
       - name: Checkout repository
         if: ${{ inputs.confirmation == 'PUBLISH' }}
         uses: actions/checkout@v4
         with:
           persist-credentials: true
+
       - name: Publish approved draft
         if: ${{ inputs.confirmation == 'PUBLISH' }}
         env:
           INSTAGRAM_ACCESS_TOKEN: ${{ secrets.INSTAGRAM_ACCESS_TOKEN }}
           CONFIRM_PUBLISH: "oui"
         run: python scripts/publish_approved.py
+
       - name: Save publication state
         if: ${{ inputs.confirmation == 'PUBLISH' }}
         run: |
