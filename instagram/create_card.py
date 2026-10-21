@@ -80,15 +80,26 @@ parser = FeaturedTitle()
 parser.feed(page_html)
 title = re.sub(r"\s+", " ", parser.title or "L’actualité de l’Olympique de Marseille").strip()
 
-# Dégradé bleu nuit, texture graphique et accents cyan de marque.
-im = Image.new("RGB", (W, H), NAVY)
-px = im.load()
-for y in range(H):
-    t = y / (H - 1)
-    row = tuple(int(NAVY[i] * (1-t) + NAVY2[i] * t) for i in range(3))
-    for x in range(W):
-        glow = max(0.0, 1 - (((x-900)/720)**2 + ((y-210)/560)**2)**0.5)
-        px[x, y] = tuple(min(255, int(row[i] + glow * (CYAN[i]-row[i]) * 0.13)) for i in range(3))
+# Utilise les deux modèles Canva comme base visuelle quand ils sont présents.
+# Le panneau éditorial opaque plus bas masque le texte d'exemple du modèle.
+from PIL import ImageOps
+is_stat = bool(re.search(r"\d|%|\b(chiffre|statistique|pourcentage|classement)\b", title, re.I))
+template_path = Path(
+    "instagram/Post Instagram carré OM Radar — Chiffre du jour.png"
+    if is_stat else "instagram/Carte actu OM Radar.png"
+)
+if template_path.exists():
+    im = ImageOps.fit(Image.open(template_path).convert("RGB"), (W, H), method=Image.Resampling.LANCZOS)
+else:
+    # Repli autonome si un modèle est absent.
+    im = Image.new("RGB", (W, H), NAVY)
+    px = im.load()
+    for y0 in range(H):
+        t = y0 / (H - 1)
+        row = tuple(int(NAVY[i] * (1-t) + NAVY2[i] * t) for i in range(3))
+        for x in range(W):
+            glow = max(0.0, 1 - (((x-900)/720)**2 + ((y0-210)/560)**2)**0.5)
+            px[x, y0] = tuple(min(255, int(row[i] + glow * (CYAN[i]-row[i]) * 0.13)) for i in range(3))
 
 d = ImageDraw.Draw(im, "RGBA")
 # Motif circulaire discret, lignes obliques et liseré de signature.
@@ -119,7 +130,7 @@ d.rounded_rectangle((64, 257, 267, 303), radius=22, fill=(*CYAN, 28), outline=(*
 d.text((84, 269), "LE POINT OM", font=font(17, True), fill=CYAN)
 
 # Grand bloc éditorial, respirant et lisible en petit dans le fil Instagram.
-d.rounded_rectangle((48, 330, 1032, 860), radius=30, fill=(3, 12, 27, 218), outline=(255, 255, 255, 28), width=2)
+d.rounded_rectangle((48, 330, 1032, 860), radius=30, fill=(3, 12, 27, 252), outline=(255, 255, 255, 80), width=2)
 d.rounded_rectangle((82, 382, 92, 796), radius=5, fill=(*CYAN, 255))
 title_font = font(52, True)
 lines = wrap(d, title, title_font, 850, 5)
