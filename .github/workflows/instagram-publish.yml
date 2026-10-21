@@ -1,20 +1,25 @@
-name: OM Radar — préparer une carte Instagram
-
+name: OM Radar — publications Instagram automatiques
 on:
   schedule:
     - cron: "0 8 * * *"
     - cron: "0 18 * * *"
   workflow_dispatch:
+    inputs:
+      publier:
+        description: "Publier maintenant sur Instagram (sinon, préparer seulement la carte)"
+        required: true
+        type: boolean
+        default: false
 
 permissions:
   contents: write
 
 concurrency:
-  group: om-radar-instagram-draft
+  group: om-radar-instagram
   cancel-in-progress: false
 
 jobs:
-  prepare:
+  instagram:
     runs-on: ubuntu-latest
     steps:
       - name: Récupérer le dépôt
@@ -25,20 +30,84 @@ jobs:
         uses: actions/setup-python@v5
         with:
           python-version: "3.12"
-      - name: Installer les dépendances
-        run: python -m pip install --disable-pip-version-check feedparser pillow
-      - name: Préparer le brouillon
-        id: prepare
-        run: python scripts/prepare_post.py
-      - name: Enregistrer le brouillon dans GitHub
-        if: steps.prepare.outputs.ready == 'true'
+      - name: Installer Pillow
+        run: python -m pip install --disable-pip-version-check Pillow
+      - name: Générer le visuel OM Radar
+        run: python instagram/create_card.py
+      - name: Enregistrer le visuel et préparer son URL publique
+        id: card
         run: |
+          set -euo pipefail
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add instagram-posts/ data/pending.json data/published.json
+          git add instagram/latest.jpg
           if git diff --cached --quiet; then
-            echo "Aucun nouveau fichier à enregistrer."
+            echo "Le visuel est identique à la version précédente."
           else
-            git commit -m "Prepare Instagram draft [skip ci]"
+            git commit -m "Prepare Instagram card [skip ci]"
             git push
           fi
+          echo "image_url=https://raw.githubusercontent.com/omradar/om-radar/main/instagram/latest.jpg?v=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+      - name: Vérifier le secret Instagram
+        if: ${{ github.event_name == 'schedule' || inputs.publier }}
+        env:
+          INSTAGRAM_ACCESS_TOKEN: ${{ secrets.INSTAGRAM_ACCESS_TOKEN }}
+        run: |
+          if [ -z "${INSTAGRAM_ACCESS_TOKEN:-}" ]; then
+            echo "Le secret INSTAGRAM_ACCESS_TOKEN est absent ou vide."
+            exit 1
+          fi
+      - name: Publier automatiquement sur Instagram
+        if: ${{ github.event_name == 'schedule' || inputs.publier }}
+        env:
+          INSTAGRAM_ACCESS_TOKEN: ${{ secrets.INSTAGRAM_ACCESS_TOKEN }}
+          IMAGE_URL: ${{ steps.card.outputs.image_url }}
+        run: |
+          set -euo pipefail
+          me="$(curl --silent --show-error --fail-with-body --get "https://graph.instagram.com/me" \
+            --data-urlencode "fields=user_id,username" \
+            --data-urlencode "access_token=${INSTAGRAM_ACCESS_TOKEN}")"
+          user_id="$(python -c 'import json,sys; print(json.load(sys.stdin).get("user_id", ""))' <<< "$me")"
+          username="$(python -c 'import json,sys; print(json.load(sys.stdin).get("username", ""))' <<< "$me")"
+          if [ -z "$user_id" ]; then
+            echo "Instagram n'a pas retourné l'identifiant du compte."
+            exit 1
+          fi
+          caption="$(printf '%s\n' \
+            'OM Radar ⚽' \
+            "Actualités, résultats et statistiques de l'Olympique de Marseille." \
+            'À lire sur https://omradar.github.io/om-radar/' \
+            '' \
+            '#OM #TeamOM #OlympiqueDeMarseille #Football')"
+          container="$(curl --silent --show-error --fail-with-body --request POST "https://graph.instagram.com/${user_id}/media" \
+            --data-urlencode "image_url=${IMAGE_URL}" \
+            --data-urlencode "caption=${caption}" \
+            --data-urlencode "access_token=${INSTAGRAM_ACCESS_TOKEN}")"
+          creation_id="$(python -c 'import json,sys; print(json.load(sys.stdin).get("id", ""))' <<< "$container")"
+          if [ -z "$creation_id" ]; then
+            echo "Instagram n'a pas créé le média."
+            exit 1
+          fi
+          ready=false
+          for attempt in $(seq 1 12); do
+            status="$(curl --silent --show-error --fail-with-body --get "https://graph.instagram.com/${creation_id}" \
+              --data-urlencode "fields=status_code" \
+              --data-urlencode "access_token=${INSTAGRAM_ACCESS_TOKEN}" | python -c 'import json,sys; print(json.load(sys.stdin).get("status_code", ""))')"
+            if [ "$status" = "FINISHED" ]; then ready=true; break; fi
+            if [ "$status" = "ERROR" ]; then echo "Instagram a signalé une erreur de traitement du média."; exit 1; fi
+            sleep 5
+          done
+          if [ "$ready" != "true" ]; then
+            echo "Le média Instagram n'est pas prêt après attente."
+            exit 1
+          fi
+          result="$(curl --silent --show-error --fail-with-body --request POST "https://graph.instagram.com/${user_id}/media_publish" \
+            --data-urlencode "creation_id=${creation_id}" \
+            --data-urlencode "access_token=${INSTAGRAM_ACCESS_TOKEN}")"
+          post_id="$(python -c 'import json,sys; print(json.load(sys.stdin).get("id", ""))' <<< "$result")"
+          if [ -z "$post_id" ]; then
+            echo "Instagram n'a pas confirmé la publication."
+            exit 1
+          fi
+          echo "Publication confirmée pour le compte @${username}."
+          echo "ID du post : ${post_id}"
