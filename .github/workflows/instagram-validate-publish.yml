@@ -1,13 +1,16 @@
-name: OM Radar - valider et publier Instagram
+name: OM Radar Instagram approval
 
 on:
   workflow_dispatch:
     inputs:
       approve:
-        description: "Je confirme avoir vérifié le visuel et je demande sa publication"
-        type: boolean
+        description: "Type yes only after checking the image"
+        type: choice
         required: true
-        default: false
+        default: "no"
+        options:
+          - "no"
+          - "yes"
 
 permissions:
   contents: write
@@ -18,32 +21,36 @@ concurrency:
 
 jobs:
   publish:
-    if: inputs.approve
     runs-on: ubuntu-latest
     steps:
-      - name: Récupérer le dépôt
+      - name: Stop unless explicitly approved
+        if: ${{ inputs.approve != 'yes' }}
+        run: |
+          echo "Not approved. Nothing will be published."
+          exit 0
+
+      - name: Checkout repository
+        if: ${{ inputs.approve == 'yes' }}
         uses: actions/checkout@v4
         with:
           persist-credentials: true
-      - name: Publier le brouillon explicitement validé
+
+      - name: Publish approved draft
+        if: ${{ inputs.approve == 'yes' }}
         env:
           INSTAGRAM_ACCESS_TOKEN: ${{ secrets.INSTAGRAM_ACCESS_TOKEN }}
           CONFIRM_PUBLISH: "oui"
         run: python scripts/publish_approved.py
-      - name: Enregistrer l'état de publication
+
+      - name: Save publication state
+        if: ${{ inputs.approve == 'yes' }}
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add data/pending.json data/published.json
           if git diff --cached --quiet; then
-            echo "Aucun changement d'état à enregistrer."
+            echo "No publication state changes to save."
           else
             git commit -m "Record approved Instagram publication [skip ci]"
             git push
           fi
-  not-approved:
-    if: ${{ !inputs.approve }}
-    runs-on: ubuntu-latest
-    steps:
-      - name: Ne rien publier
-        run: echo "Publication annulée : aucune confirmation explicite."
