@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Génère une carte Instagram OM Radar graphique, sans photos de personnes."""
+"""Génère une carte Instagram éditoriale OM Radar, sans photos de personnes."""
 import html
 import re
 import urllib.request
@@ -10,10 +10,11 @@ from PIL import Image, ImageDraw, ImageFont
 SITE = "https://omradar.github.io/om-radar/"
 OUT = Path("instagram/latest.jpg")
 W = H = 1080
-NAVY = (5, 17, 36)
-NAVY2 = (7, 35, 62)
-CYAN = (60, 180, 242)
-WHITE = (248, 251, 255)
+NAVY = (4, 14, 31)
+NAVY2 = (7, 31, 57)
+CYAN = (48, 190, 239)
+WHITE = (247, 250, 255)
+MUTED = (166, 190, 211)
 UA = {"User-Agent": "Mozilla/5.0 (compatible; OM-Radar-Instagram/1.0)"}
 
 class FeaturedTitle(HTMLParser):
@@ -77,57 +78,66 @@ with urllib.request.urlopen(req, timeout=20) as response:
     page_html = response.read().decode("utf-8", "replace")
 parser = FeaturedTitle()
 parser.feed(page_html)
-title = parser.title or "L’actualité de l’Olympique de Marseille"
-title = re.sub(r"\s+", " ", title).strip()
+title = re.sub(r"\s+", " ", parser.title or "L’actualité de l’Olympique de Marseille").strip()
 
-# Fond bleu nuit texturé avec accents graphiques abstraits, sans photo ni portrait.
+# Dégradé bleu nuit, texture graphique et accents cyan de marque.
 im = Image.new("RGB", (W, H), NAVY)
 px = im.load()
 for y in range(H):
     t = y / (H - 1)
     row = tuple(int(NAVY[i] * (1-t) + NAVY2[i] * t) for i in range(3))
     for x in range(W):
-        glow = max(0.0, 1 - (((x-900)/650)**2 + ((y-180)/500)**2)**0.5)
-        px[x, y] = tuple(min(255, int(row[i] + glow * (CYAN[i]-row[i]) * 0.16)) for i in range(3))
+        glow = max(0.0, 1 - (((x-900)/720)**2 + ((y-210)/560)**2)**0.5)
+        px[x, y] = tuple(min(255, int(row[i] + glow * (CYAN[i]-row[i]) * 0.13)) for i in range(3))
 
 d = ImageDraw.Draw(im, "RGBA")
-# Traits obliques et grand motif circulaire discret.
-d.arc((570, 170, 1230, 830), 30, 320, fill=(*CYAN, 45), width=16)
-d.arc((640, 240, 1160, 760), 30, 320, fill=(*CYAN, 28), width=7)
-for k in range(4):
-    d.polygon([(820+k*48, 0), (875+k*48, 0), (500+k*48, 400), (465+k*48, 400)], fill=(*CYAN, 18))
-d.polygon([(0, 970), (210, 970), (100, 1080), (0, 1080)], fill=(*CYAN, 210))
-d.polygon([(0, 1020), (120, 1020), (60, 1080), (0, 1080)], fill=(255,255,255,230))
+# Motif circulaire discret, lignes obliques et liseré de signature.
+d.rectangle((0, 0, 14, H), fill=(*CYAN, 255))
+d.arc((680, 105, 1250, 675), 25, 325, fill=(*CYAN, 50), width=18)
+d.arc((745, 170, 1185, 610), 25, 325, fill=(255, 255, 255, 24), width=3)
+for k in range(5):
+    d.polygon([(870+k*45, 0), (900+k*45, 0), (600+k*45, 300), (570+k*45, 300)], fill=(*CYAN, 13))
+d.polygon([(0, 1000), (185, 1000), (105, 1080), (0, 1080)], fill=(*CYAN, 230))
+d.polygon([(0, 1035), (92, 1035), (47, 1080), (0, 1080)], fill=(255, 255, 255, 235))
 
-# Logo existant du site : conserve son alpha s'il est présent.
+# Logo du projet, sans portrait ni photo d'article.
 logo_path = Path("assets/logo-320.png")
 if logo_path.exists():
     logo = Image.open(logo_path).convert("RGBA")
-    logo.thumbnail((142, 142), Image.Resampling.LANCZOS)
+    logo.thumbnail((112, 112), Image.Resampling.LANCZOS)
     im_rgba = im.convert("RGBA")
-    im_rgba.alpha_composite(logo, (62, 46))
+    im_rgba.alpha_composite(logo, (58, 42))
     im = im_rgba.convert("RGB")
     d = ImageDraw.Draw(im, "RGBA")
-    d.text((225, 67), "OM RADAR", font=font(40, True), fill=WHITE)
+    d.text((190, 66), "OM RADAR", font=font(37, True), fill=WHITE)
 else:
-    d.rounded_rectangle((58, 55, 425, 145), radius=20, fill=(3, 16, 30, 230))
-    d.text((85, 73), "OM RADAR", font=font(42, True), fill=WHITE)
+    d.text((64, 67), "OM RADAR", font=font(40, True), fill=WHITE)
 
-d.text((64, 190), "LE POINT SUR L’OM", font=font(23, True), fill=CYAN)
-d.line((64, 235, 1016, 235), fill=(*CYAN, 160), width=3)
-d.text((64, 285), "ACTUALITÉ", font=font(21, True), fill=CYAN)
-d.rounded_rectangle((48, 340, 1032, 870), radius=28, fill=(3, 14, 29, 224), outline=(*CYAN, 115), width=2)
-d.rounded_rectangle((82, 385, 95, 805), radius=6, fill=(*CYAN, 255))
-f_title = font(51, True)
-lines = wrap(d, title, f_title, 850, 5)
-y = 410
+d.text((64, 177), "L’ACTU MARSEILLAISE, SANS DÉTOUR", font=font(19, True), fill=CYAN)
+d.line((64, 220, 1016, 220), fill=(*CYAN, 115), width=2)
+d.rounded_rectangle((64, 257, 267, 303), radius=22, fill=(*CYAN, 28), outline=(*CYAN, 175), width=2)
+d.text((84, 269), "LE POINT OM", font=font(17, True), fill=CYAN)
+
+# Grand bloc éditorial, respirant et lisible en petit dans le fil Instagram.
+d.rounded_rectangle((48, 330, 1032, 860), radius=30, fill=(3, 12, 27, 218), outline=(255, 255, 255, 28), width=2)
+d.rounded_rectangle((82, 382, 92, 796), radius=5, fill=(*CYAN, 255))
+title_font = font(52, True)
+lines = wrap(d, title, title_font, 850, 5)
+if len(lines) >= 5 and any(len(line) > 24 for line in lines):
+    title_font = font(46, True)
+    lines = wrap(d, title, title_font, 850, 5)
+line_height = 74 if title_font.size >= 50 else 66
+y = 392
 for line in lines:
-    d.text((125, y), line, font=f_title, fill=WHITE, stroke_width=0)
-    y += 77
-d.line((125, 815, 955, 815), fill=(*CYAN, 200), width=2)
-d.text((64, 920), "ACTUALITÉS  •  RÉSULTATS  •  ANALYSES", font=font(22, True), fill=CYAN)
-d.text((64, 1010), "omradar.github.io/om-radar", font=font(19), fill=(220,235,247,220))
+    d.text((125, y), line, font=title_font, fill=WHITE)
+    y += line_height
+
+# Pied de carte de marque.
+d.line((64, 900, 1016, 900), fill=(255, 255, 255, 45), width=2)
+d.text((64, 928), "ACTUALITÉS  /  RÉSULTATS  /  STATS", font=font(20, True), fill=CYAN)
+d.text((64, 982), "OMRADAR.GITHUB.IO/OM-RADAR", font=font(17), fill=MUTED)
+d.text((930, 978), "OM", font=font(40, True), fill=(255, 255, 255, 45))
 
 OUT.parent.mkdir(parents=True, exist_ok=True)
-im.save(OUT, "JPEG", quality=94, optimize=True)
-print("Brouillon créé :", OUT, "| titre :", title[:160])
+im.save(OUT, "JPEG", quality=95, optimize=True)
+print("Carte OM Radar générée :", OUT, "| titre :", title[:160])
