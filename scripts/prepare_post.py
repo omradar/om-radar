@@ -11,6 +11,7 @@ DATA.mkdir(exist_ok=True)
 POSTS.mkdir(exist_ok=True)
 STATE_FILE = DATA / "published.json"
 PENDING_FILE = DATA / "pending.json"
+REJECTED_FILE = DATA / "rejected.json"
 FEED_URL = "https://news.google.com/rss/search?q=" + quote_plus("Olympique de Marseille when:2d") + "&hl=fr&gl=FR&ceid=FR:fr"
 MAX_AGE_HOURS = 48
 
@@ -87,7 +88,8 @@ def main():
     state = load_json(STATE_FILE, {"published_urls": [], "media_ids": []})
     published = set(state.get("published_urls", []))
     pending = load_json(PENDING_FILE, {})
-    if pending.get("url") and pending["url"] not in published:
+    rejected = set(load_json(REJECTED_FILE, {}).get("rejected_urls", []))
+    if pending.get("url") and pending["url"] not in published and pending["url"] not in rejected:
         print("Un brouillon attend déjà une validation : " + str(pending.get("filename", "")))
         with open(os.environ["GITHUB_OUTPUT"], "a", encoding="utf-8") as f:
             f.write("ready=true\n")
@@ -105,7 +107,7 @@ def main():
     for entry in feed.entries:
         url = entry.get("link", "").strip()
         title = re.sub(r"\s+", " ", entry.get("title", "")).strip()
-        if not url or not title or url in published:
+        if not url or not title or url in published or url in rejected:
             continue
         published_parsed = entry.get("published_parsed") or entry.get("updated_parsed")
         if published_parsed:
