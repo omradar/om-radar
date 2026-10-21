@@ -1,9 +1,5 @@
 name: OM Radar — publications Instagram automatiques
 on:
-  # GitHub utilise UTC. Ces quatre déclenchements couvrent 9 h et 18 h
-  # en heure de Paris, été comme hiver ; le job gate filtre les heures inutiles.
-  schedule:
-    - cron: "0 7,8,16,17 * * *"
   workflow_dispatch:
     inputs:
       publier:
