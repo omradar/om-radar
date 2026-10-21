@@ -1,5 +1,9 @@
 name: OM Radar — publications Instagram automatiques
 on:
+  # Un push du générateur prépare un aperçu sur GitHub, sans publication Instagram.
+  push:
+    paths:
+      - "instagram/create_card.py"
   workflow_dispatch:
     inputs:
       publier:
@@ -69,7 +73,7 @@ jobs:
           fi
           echo "image_url=https://raw.githubusercontent.com/omradar/om-radar/main/instagram/latest.jpg?v=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
       - name: Vérifier le secret Instagram
-        if: ${{ github.event_name == 'schedule' || inputs.publier }}
+        if: ${{ github.event_name == 'schedule' || (github.event_name == 'workflow_dispatch' && inputs.publier) }}
         env:
           INSTAGRAM_ACCESS_TOKEN: ${{ secrets.INSTAGRAM_ACCESS_TOKEN }}
         run: |
@@ -78,7 +82,7 @@ jobs:
             exit 1
           fi
       - name: Publier automatiquement sur Instagram
-        if: ${{ github.event_name == 'schedule' || inputs.publier }}
+        if: ${{ github.event_name == 'schedule' || (github.event_name == 'workflow_dispatch' && inputs.publier) }}
         env:
           INSTAGRAM_ACCESS_TOKEN: ${{ secrets.INSTAGRAM_ACCESS_TOKEN }}
           IMAGE_URL: ${{ steps.card.outputs.image_url }}
