@@ -160,4 +160,5 @@ d.text((1008, 965), "#OMRADAR", font=font(24, True), fill=WHITE, anchor="ra")
 
 OUT.parent.mkdir(parents=True, exist_ok=True)
 im.save(OUT, "JPEG", quality=95, optimize=True)
+print("APERÇU UNIQUEMENT — aucune publication Instagram déclenchée.")
 print("Carte OM Radar générée :", OUT, "| titre :", title[:160])
