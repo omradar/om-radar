@@ -81,10 +81,10 @@ with urllib.request.urlopen(req, timeout=20) as response:
 parser = FeaturedTitle()
 parser.feed(page_html)
 title = re.sub(r"\s+", " ", parser.title or "L’actualité de l’Olympique de Marseille").strip()
-# Édition spéciale du jour : avant-match européen, uniquement le 22 octobre 2026.
+# Édition spéciale du jour : carte JOUR DE MATCH pour le 22 octobre 2026.
 matchday = datetime.now(ZoneInfo("Europe/Paris")).date().isoformat() == "2026-10-22"
 if matchday:
-    title = "STURM GRAZ – OM : L’EUROPE EN JEU"
+    title = "STURM GRAZ – OM : C’EST LE JOUR J"
 
 # Fond dessiné ici : aucun texte d'exemple Canva, portrait ou statistique inventée.
 im = Image.new("RGB", (W, H), NAVY)
@@ -129,7 +129,7 @@ d.text((180, 117), "ACTUS  ·  RÉSULTATS  ·  STATS", font=font(15, True), fill
 d.text((1000, 78), "ÉDITION", font=font(15, True), fill=CYAN, anchor="ra")
 d.text((1000, 106), "MARSEILLE", font=font(20, True), fill=WHITE, anchor="ra")
 d.rounded_rectangle((72, 213, 322, 260), radius=22, fill=(*CYAN, 255))
-d.text((197, 236), "AVANT-MATCH · LIGUE EUROPA" if matchday else "LA MINUTE OM", font=font(18, True), fill=NAVY, anchor="mm")
+d.text((197, 236), "JOUR DE MATCH · LIGUE EUROPA" if matchday else "LA MINUTE OM", font=font(18, True), fill=NAVY, anchor="mm")
 
 # Titre principal provenant du site, sans inventer de score ni de chiffres.
 title_font = font(66, True)
@@ -151,8 +151,8 @@ for i, line in enumerate(lines):
 # Barre d'accent et signature de marque.
 bar_y = max(640, min(y + 22, 760))
 d.rounded_rectangle((76, bar_y, 86, bar_y + 100), radius=5, fill=(*CYAN, 255))
-d.text((112, bar_y + 10), "JEUDI 22 OCTOBRE · 18H45" if matchday else "L’ACTUALITÉ DE L’OLYMPIQUE", font=font(23, True), fill=WHITE)
-d.text((112, bar_y + 47), "STURM GRAZ – OM · MATCH À L’EXTÉRIEUR" if matchday else "DE MARSEILLE, DÉCRYPTÉE PAR OM RADAR.", font=font(18), fill=MUTED)
+d.text((112, bar_y + 10), "CE SOIR · COUP D’ENVOI 18H45" if matchday else "L’ACTUALITÉ DE L’OLYMPIQUE", font=font(23, True), fill=WHITE)
+d.text((112, bar_y + 47), "OBJECTIF : LES PREMIERS POINTS EUROPÉENS" if matchday else "DE MARSEILLE, DÉCRYPTÉE PAR OM RADAR.", font=font(18), fill=MUTED)
 d.line((72, 875, 1008, 875), fill=(21, 188, 233, 150), width=2)
 d.text((72, 910), "UN CLUB. UNE VILLE. UNE PASSION.", font=font(20, True), fill=CYAN)
 d.text((72, 963), "OMRADAR.GITHUB.IO/OM-RADAR", font=font(17), fill=MUTED)
