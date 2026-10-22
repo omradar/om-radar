@@ -88,15 +88,25 @@ jobs:
           IMAGE_URL: ${{ steps.card.outputs.image_url }}
         run: |
           set -euo pipefail
-          me="$(curl --silent --show-error --fail-with-body --get "https://graph.instagram.com/me" \
+          me_response="$(curl --silent --show-error --get "https://graph.instagram.com/me" \
             --data-urlencode "fields=user_id,username" \
-            --data-urlencode "access_token=${INSTAGRAM_ACCESS_TOKEN}")"
+            --data-urlencode "access_token=${INSTAGRAM_ACCESS_TOKEN}" \
+            --write-out '\nHTTP_STATUS:%{http_code}')"
+          http_status="${me_response##*HTTP_STATUS:}"
+          me="${me_response%HTTP_STATUS:*}"
+          if [ "$http_status" != "200" ]; then
+            echo "Échec de l'identification du compte Instagram (HTTP $http_status). Réponse API :"
+            printf '%s\n' "$me"
+            exit 1
+          fi
           user_id="$(python -c 'import json,sys; print(json.load(sys.stdin).get("user_id", ""))' <<< "$me")"
           username="$(python -c 'import json,sys; print(json.load(sys.stdin).get("username", ""))' <<< "$me")"
           if [ -z "$user_id" ]; then
-            echo "Instagram n'a pas retourné l'identifiant du compte."
+            echo "Instagram n'a pas retourné user_id. Réponse API :"
+            printf '%s\n' "$me"
             exit 1
           fi
+          echo "Compte Instagram identifié : @${username} (aucune publication encore effectuée à cette étape)."
           caption="$(printf '%s\n' \
             'OM Radar ⚽' \
             "Actualités, résultats et statistiques de l'Olympique de Marseille." \
